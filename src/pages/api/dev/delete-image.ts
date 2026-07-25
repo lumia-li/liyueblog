@@ -156,7 +156,10 @@ async function deleteRepoFile(params: {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-	const expectedCode = import.meta.env.DEV_EDITOR_CODE || "liyue233";
+	const expectedCode = import.meta.env.DEV_EDITOR_CODE;
+	if (!expectedCode) {
+		return json(500, { ok: false, message: "Server misconfigured: DEV_EDITOR_CODE not set" });
+	}
 
 	let body: DeleteImageRequest;
 	try {

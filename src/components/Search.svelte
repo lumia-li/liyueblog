@@ -236,8 +236,8 @@ $: if (initialized && keywordMobile) {
        href={editorHref}
        data-no-swup
        aria-label="Open Editor"
-       class="btn-plain scale-animation hidden lg:!inline-flex rounded-lg h-11 w-11 active:scale-90 mr-2"
-       title="文章"
+       class="nav-icon-btn hidden lg:!inline-flex h-11 w-11 active:scale-90 mr-2"
+       data-tooltip="文章"
     >
         <Icon icon="fa6-solid:pen" class="text-[1rem]"></Icon>
     </a>
@@ -245,8 +245,8 @@ $: if (initialized && keywordMobile) {
        href={draftsHref}
        data-no-swup
        aria-label="Open Drafts"
-       class="btn-plain scale-animation hidden lg:!inline-flex rounded-lg h-11 w-11 active:scale-90 mr-2"
-       title="草稿"
+       class="nav-icon-btn hidden lg:!inline-flex h-11 w-11 active:scale-90 mr-2"
+       data-tooltip="草稿"
     >
         <Icon icon="fa6-solid:box-archive" class="text-[1rem]"></Icon>
     </a>
@@ -254,8 +254,8 @@ $: if (initialized && keywordMobile) {
        href={trashHref}
        data-no-swup
        aria-label="Open Trash"
-       class="btn-plain scale-animation hidden lg:!inline-flex rounded-lg h-11 w-11 active:scale-90 mr-2 text-red-500/90 hover:text-red-500"
-       title="垃圾桶"
+       class="nav-icon-btn nav-icon-btn-danger hidden lg:!inline-flex h-11 w-11 active:scale-90 mr-2"
+       data-tooltip="垃圾桶"
     >
         <Icon
            icon="material-symbols:delete-outline-rounded"

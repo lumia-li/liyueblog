@@ -17,8 +17,65 @@ const currentYear = new Date().getFullYear();
         <span class="footer-force-black">Powered by</span>
         <a class="transition link font-medium footer-link-astro" target="_blank" href="https://astro.build">Astro</a> &
         <a class="transition link font-medium footer-link-fuwari" target="_blank" href="https://github.com/saicaca/fuwari">Fuwari</a>
+        <br>
+        <span class="uptime-line cursor-pointer select-none" title="戳一下，看板娘会汇报运行时间哦">
+            <span class="footer-force-black">本站已运行：</span>
+            <span class="uptime-days">0</span>天
+            <span class="uptime-hours">0</span>小时
+            <span class="uptime-minutes">0</span>分
+            <span class="uptime-seconds">0</span>秒
+        </span>
     </div>
 </div>
+
+<script is:inline>
+    (function () {
+        if (window.__uptimeInitialized) return;
+        window.__uptimeInitialized = true;
+
+        const start = new Date('2026-02-11T08:58:18');
+
+        function getUptime() {
+            const diff = Date.now() - start.getTime();
+            const totalSeconds = Math.max(0, Math.floor(diff / 1000));
+            return {
+                days: Math.floor(totalSeconds / 86400),
+                hours: Math.floor((totalSeconds % 86400) / 3600),
+                minutes: Math.floor((totalSeconds % 3600) / 60),
+                seconds: totalSeconds % 60,
+            };
+        }
+
+        function update() {
+            const u = getUptime();
+            document.querySelectorAll('.uptime-days').forEach(el => el.textContent = String(u.days));
+            document.querySelectorAll('.uptime-hours').forEach(el => el.textContent = String(u.hours));
+            document.querySelectorAll('.uptime-minutes').forEach(el => el.textContent = String(u.minutes));
+            document.querySelectorAll('.uptime-seconds').forEach(el => el.textContent = String(u.seconds));
+        }
+
+        function speak() {
+            const show = window.showWaifuMessage;
+            if (typeof show !== 'function') return;
+            const u = getUptime();
+            const templates = [
+                `本站已经运行了 ${u.days} 天 ${u.hours} 小时 ${u.minutes} 分 ${u.seconds} 秒啦～`,
+                `我已经在这里站了 ${u.days} 天岗，厉害吧！`,
+                `时间过得好快，已经 ${u.days} 天 ${u.hours} 小时了呢。`,
+                `再点一下，我也不会累的哦。`,
+            ];
+            const msg = templates[Math.floor(Math.random() * templates.length)];
+            show(msg, 4000, 8);
+        }
+
+        update();
+        setInterval(update, 1000);
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.uptime-line')) speak();
+        });
+    })();
+</script>
+
 
 <style>
   .footer-force-black {

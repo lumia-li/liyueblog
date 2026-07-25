@@ -2,16 +2,13 @@
 import BackToTop from "@components/control/BackToTop.astro";
 import Footer from "@components/Footer.astro";
 import Navbar from "@components/Navbar.astro";
-import BusuanziStats from "@components/widget/BusuanziStats.astro";
 import SideBar from "@components/widget/SideBar.astro";
 import type { MarkdownHeading } from "astro";
 import { Icon } from "astro-icon/components";
 import ImageWrapper from "../components/misc/ImageWrapper.astro";
 import TOC from "../components/widget/TOC.astro";
 import { siteConfig } from "../config";
-import {
-	BANNER_HEIGHT_EXTEND,
-} from "../constants/constants";
+import { BANNER_HEIGHT_EXTEND } from "../constants/constants";
 import { normalizeBannerObjectPosition } from "../utils/banner-utils";
 import { url } from "../utils/url-utils";
 import Layout from "./Layout.astro";
@@ -44,15 +41,15 @@ const bannerPosition = normalizeBannerObjectPosition(
 	siteConfig.banner.position,
 );
 
-const mainPanelTop = "var(--main-panel-top, 5.5rem)";
+const mainPanelTop = "var(--main-panel-top, 12rem)";
 ---
 
 <Layout title={title} banner={banner} description={description} lang={lang} setOGTypeArticle={setOGTypeArticle} pageType={pageType}>
 
 <!-- Navbar -->
 <slot slot="head" name="head"></slot>
-<div id="top-row" class="z-50 pointer-events-none relative transition-all duration-700 max-w-[var(--page-width)] px-0 md:px-4 mx-auto" class:list={[""]}>
-    <div id="navbar-wrapper" class="pointer-events-auto sticky top-0 transition-all">
+<div id="top-row" class="z-50 pointer-events-none fixed top-6 left-0 right-0 max-w-[var(--page-width)] px-0 md:px-4 mx-auto" class:list={[""]}>
+    <div id="navbar-wrapper" class="pointer-events-auto">
         <Navbar></Navbar>
     </div>
 </div>
@@ -66,7 +63,7 @@ const mainPanelTop = "var(--main-panel-top, 5.5rem)";
 </div>
 
 <!-- Main content -->
-<div id="main-panel-shell" class="absolute w-full z-30 pointer-events-none" style={`top: ${mainPanelTop}`}>
+<div id="main-panel-shell" class="absolute w-full z-30 pointer-events-none transition-[top] duration-700 ease-in-out" style={`top: ${mainPanelTop}`}>
     <!-- The pointer-events-none here prevent blocking the click event of the TOC -->
     <div class="relative max-w-[var(--page-width)] mx-auto pointer-events-auto">
         <div id="main-grid" class:list={["transition duration-700 w-full left-0 right-0 grid grid-cols-[17.5rem_auto] grid-rows-[auto_1fr_auto] lg:grid-rows-[auto] mx-auto gap-4 px-0 md:px-4",
@@ -108,8 +105,8 @@ const mainPanelTop = "var(--main-panel-top, 5.5rem)";
     </div>
 </div>
 
-<!-- The things that should be under the banner, only the TOC for now -->
-<div class="absolute w-full z-0 hidden lg:block">
+<!-- TOC needs higher z-index than main-panel (z-30) to be clickable -->
+<div class="absolute w-full z-40 hidden lg:block">
     <div class="relative max-w-[var(--page-width)] mx-auto">
         <!-- TOC component -->
         {(siteConfig.toc.enable || isPostsRoute) && <div id="toc-wrapper" style="--toc-width-safe: var(--toc-width, 18rem);" class:list={["hidden lg:block transition absolute top-0 -right-[var(--toc-width-safe)] w-[var(--toc-width-safe)] items-center",
@@ -118,7 +115,6 @@ const mainPanelTop = "var(--main-panel-top, 5.5rem)";
                 <div id="toc" class="w-full h-full transition-swup-fade ">
                     <div class="h-8 w-full"></div>
                     {siteConfig.toc.enable && <TOC headings={headings}></TOC>}
-                    <BusuanziStats></BusuanziStats>
                     <div class="h-8 w-full"></div>
                 </div>
             </div>
@@ -129,3 +125,5 @@ const mainPanelTop = "var(--main-panel-top, 5.5rem)";
     </div>
 </div>
 </Layout>
+
+

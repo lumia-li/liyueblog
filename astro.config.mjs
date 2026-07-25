@@ -42,7 +42,9 @@ export default defineConfig({
           // the default value `transition-` cause transition delay
           // when the Tailwind class `transition-all` is used
           containers: ["main", "#toc"],
-          smoothScrolling: true,
+          // Keep the page fade, but reset the scroll position immediately between pages.
+          // Animating from the bottom of a long post forces a full layout on every frame.
+          smoothScrolling: false,
           cache: true,
           preload: true,
           accessibility: true,

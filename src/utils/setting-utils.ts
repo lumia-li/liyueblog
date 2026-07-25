@@ -542,6 +542,28 @@ export function setBackgroundBlur(blur: number): void {
 	}
 }
 
+// Navbar auto-hide settings
+const NAVBAR_AUTO_HIDE_KEY = "navbarAutoHide";
+
+export function getNavbarAutoHide(): boolean {
+	if (!canUseStorage()) {
+		return false;
+	}
+	return localStorage.getItem(NAVBAR_AUTO_HIDE_KEY) === "true";
+}
+
+export function setNavbarAutoHide(enabled: boolean): void {
+	if (!canUseStorage()) {
+		return;
+	}
+	localStorage.setItem(NAVBAR_AUTO_HIDE_KEY, String(enabled));
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(
+			new CustomEvent("navbar-auto-hide-change", { detail: enabled }),
+		);
+	}
+}
+
 // Background image selection
 const BACKGROUND_INDEX_KEY = "backgroundIndex";
 

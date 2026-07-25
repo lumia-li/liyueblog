@@ -11,8 +11,7 @@ function loadExternalResource(url, type) {
 			tag = document.createElement("link");
 			tag.rel = "stylesheet";
 			tag.href = url;
-		}
-		else if (type === "js") {
+		} else if (type === "js") {
 			tag = document.createElement("script");
 			tag.src = url;
 		}
@@ -27,17 +26,26 @@ function loadExternalResource(url, type) {
 // 加载 waifu.css live2d.min.js waifu-tips.js
 if (screen.width >= 768) {
 	Promise.all([
-		loadExternalResource(live2d_path + "waifu.css", "css"),
-		loadExternalResource(live2d_path + "live2d.min.js", "js"),
-		loadExternalResource(live2d_path + "waifu-tips.js", "js")
+		loadExternalResource(`${live2d_path}waifu.css`, "css"),
+		loadExternalResource(`${live2d_path}live2d.min.js`, "js"),
+		loadExternalResource(`${live2d_path}waifu-tips.js`, "js"),
 	]).then(() => {
 		// 配置选项的具体用法见 README.md
 		initWidget({
 			isLocalModel: true, // 使用本地模型
-			waifuPath: live2d_path + "waifu-tips.json",
-			modelsPath: live2d_path + "model",
-			modelListPath: live2d_path + "model/model_list.json",
-			tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "mute", "quit"]
+			waifuPath: `${live2d_path}waifu-tips.json`,
+			modelsPath: `${live2d_path}model`,
+			modelListPath: `${live2d_path}model/model_list.json`,
+			tools: [
+				"hitokoto",
+				"asteroids",
+				"switch-model",
+				"switch-texture",
+				"photo",
+				"info",
+				"mute",
+				"quit",
+			],
 		});
 
 		// 添加摸头效果
@@ -52,7 +60,22 @@ if (screen.width >= 768) {
 		let headPatting = false;
 		let lastX = 0;
 		let headPatCount = 0;
-		const headPatMessages = ["欸，突然摸头干嘛呀？", "好啦好啦，别一直摸嘛。", "有点痒，你轻一点。", "住手住手，我发型要乱了！", "讨厌，你怎么又来逗我。", "摸头之前至少先说一声嘛。", "唔……这样好像还挺舒服的。", "坏蛋，就知道趁机欺负我。", "别闹啦，我都快不好意思了。", "其实……再摸一下也不是不行。", "嗯哼，再来一点点？", "好了啦，差不多可以停了。", "喂，不许趁机乱碰。"];
+		const headPatMessages = [
+			"欸，突然摸头干嘛呀？",
+			"好啦好啦，别一直摸嘛。",
+			"有点痒，你轻一点。",
+			"住手住手，我发型要乱了！",
+			"讨厌，你怎么又来逗我。",
+			"摸头之前至少先说一声嘛。",
+			"唔……这样好像还挺舒服的。",
+			"坏蛋，就知道趁机欺负我。",
+			"别闹啦，我都快不好意思了。",
+			"喵喵喵！?",
+			"其实……再摸一下也不是不行。",
+			"嗯哼，再来一点点？",
+			"好了啦，差不多可以停了。",
+			"喂，不许趁机乱碰。",
+		];
 
 		const live2dElement = document.getElementById("live2d");
 		if (live2dElement) {
@@ -79,7 +102,10 @@ if (screen.width >= 768) {
 								}
 								headPatting = true;
 								// 显示摸头提示语
-								const randomMessage = headPatMessages[Math.floor(Math.random() * headPatMessages.length)];
+								const randomMessage =
+									headPatMessages[
+										Math.floor(Math.random() * headPatMessages.length)
+									];
 								const tipsElement = document.getElementById("waifu-tips");
 								if (tipsElement) {
 									tipsElement.innerHTML = randomMessage;

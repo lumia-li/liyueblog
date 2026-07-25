@@ -10,7 +10,7 @@ import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
 import { getSortedPosts } from "@utils/content-utils";
-import { getDir, getPostUrlBySlug } from "@utils/url-utils";
+import { getDir, getPostUrlBySlug, url } from "@utils/url-utils";
 import { Icon } from "astro-icon/components";
 import { licenseConfig } from "src/config";
 import ImageWrapper from "../../components/misc/ImageWrapper.astro";
@@ -56,21 +56,36 @@ const jsonLd = {
         <div id="post-container" class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
             {}
         ]}>
-            <!-- word count and reading time -->
-            <div class="flex flex-row text-black/30 dark:text-white/30 gap-5 mb-3 transition onload-animation">
-                <div class="flex flex-row items-center">
-                    <div class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2">
-                        <Icon name="material-symbols:notes-rounded"></Icon>
+            <!-- word count, reading time and action buttons -->
+            <div class="flex flex-row items-center justify-between text-black/30 dark:text-white/30 mb-3 transition onload-animation">
+                <div class="flex flex-row gap-5">
+                    <div class="flex flex-row items-center">
+                        <div class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2">
+                            <Icon name="material-symbols:notes-rounded"></Icon>
+                        </div>
+                        <div class="text-sm">{remarkPluginFrontmatter.words} {" " + i18n(I18nKey.wordsCount)}</div>
                     </div>
-                    <div class="text-sm">{remarkPluginFrontmatter.words} {" " + i18n(I18nKey.wordsCount)}</div>
+                    <div class="flex flex-row items-center">
+                        <div class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2">
+                            <Icon name="material-symbols:schedule-outline-rounded"></Icon>
+                        </div>
+                        <div class="text-sm">
+                            {remarkPluginFrontmatter.minutes} {" " + i18n(remarkPluginFrontmatter.minutes === 1 ? I18nKey.minuteCount : I18nKey.minutesCount)}
+                        </div>
+                    </div>
                 </div>
-                <div class="flex flex-row items-center">
-                    <div class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2">
-                        <Icon name="material-symbols:schedule-outline-rounded"></Icon>
-                    </div>
-                    <div class="text-sm">
-                        {remarkPluginFrontmatter.minutes} {" " + i18n(remarkPluginFrontmatter.minutes === 1 ? I18nKey.minuteCount : I18nKey.minutesCount)}
-                    </div>
+                <div class="flex flex-row gap-2">
+                    <button type="button"
+                            aria-label="返回上一页"
+                            onclick="history.back()"
+                            class="h-8 w-8 rounded-lg flex items-center justify-center bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/15 dark:hover:bg-white/15 hover:text-[var(--primary)] active:scale-95 transition">
+                        <Icon name="material-symbols:arrow-back-rounded" class="text-[1.125rem]" />
+                    </button>
+                    <a href={url('/')}
+                       aria-label="返回主页"
+                       class="h-8 w-8 rounded-lg flex items-center justify-center bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/15 dark:hover:bg-white/15 hover:text-[var(--primary)] active:scale-95 transition no-underline">
+                        <Icon name="material-symbols:home-outline-rounded" class="text-[1.125rem]" />
+                    </a>
                 </div>
             </div>
 

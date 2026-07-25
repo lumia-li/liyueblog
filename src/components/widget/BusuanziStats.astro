@@ -1,6 +1,6 @@
 ---
 ---
-<section id="busuanzi-stats-card" class="site-state card-base mt-4 p-4 transition-swup-fade onload-animation hidden">
+<section id="busuanzi-stats-card" class="site-state card-base mt-4 p-4 transition-swup-fade onload-animation">
 	<div
 		class="font-bold transition text-lg text-neutral-900 dark:text-neutral-100 relative ml-8 mb-3
         before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
@@ -48,8 +48,6 @@
 		const SCRIPT_ID = "busuanzi-counter-script";
 		const SCRIPT_SRC = "https://cdn.busuanzi.cc/busuanzi/3.6.9/busuanzi.min.js";
 		const CARD_ID = "busuanzi-stats-card";
-
-		const isPostPage = () => window.location.pathname.includes("/posts/");
 
 		const setTextSafely = (id, value) => {
 			const el = document.getElementById(id);
@@ -115,11 +113,6 @@
 		const refreshBusuanzi = () => {
 			const card = document.getElementById(CARD_ID);
 			if (!card) return;
-
-			const show = isPostPage();
-			card.classList.toggle("hidden", !show);
-
-			if (!show) return;
 
 			loadBusuanzi();
 			bindFriendObserver();

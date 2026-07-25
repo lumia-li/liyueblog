@@ -72,14 +72,19 @@ if (!lang) {
 const siteLang = lang.replace("_", "-");
 
 const bannerOffset = getBannerOffset(siteConfig.banner.position);
-const homeBannerHeight = "52vh";
+const homeBannerHeight = "56vh";
 ---
 
 <!DOCTYPE html>
 <html lang={siteLang} class="bg-[var(--page-bg)] transition text-[14px] md:text-[16px]"
-	  data-overlayscrollbars-initialize
 >
 	<head>
+		<style is:inline>
+			/* Prevent native scrollbar flash before OverlayScrollbars JS takes over.
+			   Must use is:inline so Astro doesn't extract this into an external stylesheet. */
+			* { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+			*::-webkit-scrollbar, *::-webkit-scrollbar-corner { display: none !important; }
+		</style>
 
 		<title>{pageTitle}</title>
 
@@ -969,7 +974,6 @@ const homeBannerHeight = "52vh";
 	</head>
 	<body class=" min-h-screen transition " class:list={[{"lg:is-home": isHomePage, "enable-banner": enableBanner}]}
 		data-page-type={pageType}
-		data-overlayscrollbars-initialize
 	>
 
 		<ConfigCarrier></ConfigCarrier>
@@ -985,7 +989,7 @@ const homeBannerHeight = "52vh";
 			// @ts-nocheck
 			// live2d_path 模型资源路径
 			const live2d_path = "/live2d-widget/";
-			const live2d_asset_version = "20260313-1";
+			const live2d_asset_version = "20260313-2";
 			const live2d_asset = (path: string) => `${live2d_path}${path}?v=${live2d_asset_version}`;
 
 			// 加载外部资源的方法
@@ -1097,6 +1101,8 @@ const homeBannerHeight = "52vh";
 	                        const waifuPositionStorageKey = "waifu-position";
 	                        const toolbarPlacementStorageKey = "waifu-toolbar-placement";
 	                        const waifuMuteStorageKey = "waifu-muted";
+	                        const waifuSleepStorageKey = "Sleepy";
+	                        const waifuSleepTimerStorageKey = "SleepyTimer";
 	                        const tapResetMaxDelayMs = 360;
 	                        const tapResetMaxDistancePx = 30;
 	                        const tapResetMaxMovementPx = 10;
@@ -1105,6 +1111,18 @@ const homeBannerHeight = "52vh";
 	                            "双击收到，我回左下角待机啦。",
 	                            "归位完成，我在左下角等你。",
 	                            "已回到左下角，随时听候召唤~"
+	                        ];
+	                        const sleepingMessages = [
+	                            "唔……还没睡够，让我再眯一会儿。",
+	                            "呼……现在是睡觉时间。",
+	                            "别吵嘛，我还在做梦呢……",
+	                            "好困……让我再睡一小会儿。"
+	                        ];
+	                        const wakeUpMessages = [
+	                            "唔……你把我叫醒啦？",
+	                            "早呀，我醒过来了~",
+	                            "睡饱啦，继续陪你一会儿。",
+	                            "我醒啦，有什么事吗？"
 	                        ];
 	                        const randomPick = (messages: string[]) =>
 	                            messages[Math.floor(Math.random() * messages.length)];
@@ -1165,6 +1183,14 @@ const homeBannerHeight = "52vh";
 	                                return localStorage.getItem(waifuMuteStorageKey) === "1";
 	                            } catch (error) {
 	                                console.warn("Failed to read waifu mute state.", error);
+	                                return false;
+	                            }
+	                        };
+	                        const isWaifuSleeping = () => {
+	                            try {
+	                                return sessionStorage.getItem(waifuSleepStorageKey) === "1";
+	                            } catch (error) {
+	                                console.warn("Failed to read waifu sleep state.", error);
 	                                return false;
 	                            }
 	                        };
@@ -1275,78 +1301,79 @@ const homeBannerHeight = "52vh";
 	                            lastTapX: 0,
 	                            lastTapY: 0
 	                        };
+	                        let suppressCanvasClickUntil = 0;
 
 	                        const toolbarToggleButtonId = "waifu-tool-placement";
-                        const setToolbarPlacement = (
-                            placement: "bottom" | "right",
-                            options: {
-                                persist?: boolean;
-                            } = {}
-                        ) => {
-                            const { persist = true } = options;
-                            if (!waifuToolElement) {
-                                return;
-                            }
-                            const normalizedPlacement =
-                                placement === "right" ? "right" : "bottom";
-                            waifuToolElement.dataset.placement = normalizedPlacement;
-                            if (normalizedPlacement === "right") {
-                                updateToolbarSide();
-                            } else {
-                                waifuToolElement.dataset.side = "right";
-                            }
-                            if (persist) {
-                                writeStoredToolbarPlacement(normalizedPlacement);
-                            }
-                        };
-                        const toggleToolbarPlacement = () => {
-                            if (!waifuToolElement) {
-                                return;
-                            }
-                            const currentPlacement =
-                                waifuToolElement.dataset.placement === "right"
-                                    ? "right"
-                                    : "bottom";
-                            setToolbarPlacement(
-                                currentPlacement === "right" ? "bottom" : "right"
-                            );
-                        };
-                        const mountToolbarToggleButton = () => {
-                            if (!waifuToolElement || document.getElementById(toolbarToggleButtonId)) {
-                                return;
-                            }
-                            const quitButton = document.getElementById("waifu-tool-quit");
-                            const buttonHtml =
-                                `<span id="${toolbarToggleButtonId}">&#10565;</span>`;
-                            if (quitButton) {
-                                quitButton.insertAdjacentHTML("beforebegin", buttonHtml);
-                            } else {
-                                waifuToolElement.insertAdjacentHTML("beforeend", buttonHtml);
-                            }
-                            const toggleButton = document.getElementById(toolbarToggleButtonId);
-                            if (toggleButton) {
-                                toggleButton.addEventListener("click", (event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    toggleToolbarPlacement();
-                                });
-                            }
-                        };
+	                        const setToolbarPlacement = (
+	                            placement: "bottom" | "right",
+	                            options: {
+	                                persist?: boolean;
+	                            } = {}
+	                        ) => {
+	                            const { persist = true } = options;
+	                            if (!waifuToolElement) {
+	                                return;
+	                            }
+	                            const normalizedPlacement =
+	                                placement === "right" ? "right" : "bottom";
+	                            waifuToolElement.dataset.placement = normalizedPlacement;
+	                            if (normalizedPlacement === "right") {
+	                                updateToolbarSide();
+	                            } else {
+	                                waifuToolElement.dataset.side = "right";
+	                            }
+	                            if (persist) {
+	                                writeStoredToolbarPlacement(normalizedPlacement);
+	                            }
+	                        };
+	                        const toggleToolbarPlacement = () => {
+	                            if (!waifuToolElement) {
+	                                return;
+	                            }
+	                            const currentPlacement =
+	                                waifuToolElement.dataset.placement === "right"
+	                                    ? "right"
+	                                    : "bottom";
+	                            setToolbarPlacement(
+	                                currentPlacement === "right" ? "bottom" : "right"
+	                            );
+	                        };
+	                        const mountToolbarToggleButton = () => {
+	                            if (!waifuToolElement || document.getElementById(toolbarToggleButtonId)) {
+	                                return;
+	                            }
+	                            const quitButton = document.getElementById("waifu-tool-quit");
+	                            const buttonHtml =
+	                                `<span id="${toolbarToggleButtonId}">&#10565;</span>`;
+	                            if (quitButton) {
+	                                quitButton.insertAdjacentHTML("beforebegin", buttonHtml);
+	                            } else {
+	                                waifuToolElement.insertAdjacentHTML("beforeend", buttonHtml);
+	                            }
+	                            const toggleButton = document.getElementById(toolbarToggleButtonId);
+	                            if (toggleButton) {
+	                                toggleButton.addEventListener("click", (event) => {
+	                                    event.preventDefault();
+	                                    event.stopPropagation();
+	                                    toggleToolbarPlacement();
+	                                });
+	                            }
+	                        };
 	                        mountToolbarToggleButton();
 	                        setToolbarPlacement(readStoredToolbarPlacement(), { persist: false });
 
 	                        const clearMotionFrames = () => {
-                            if (dragState.glideRafId) {
-                                cancelAnimationFrame(dragState.glideRafId);
-                                dragState.glideRafId = 0;
-                            }
-                            if (dragState.stopRafId) {
-                                cancelAnimationFrame(dragState.stopRafId);
-                                dragState.stopRafId = 0;
-                            }
-                        };
+	                            if (dragState.glideRafId) {
+	                                cancelAnimationFrame(dragState.glideRafId);
+	                                dragState.glideRafId = 0;
+	                            }
+	                            if (dragState.stopRafId) {
+	                                cancelAnimationFrame(dragState.stopRafId);
+	                                dragState.stopRafId = 0;
+	                            }
+	                        };
 
-                        const getIsAutoMoving = () => dragState.isGliding || dragState.stopRafId !== 0;
+	                        const getIsAutoMoving = () => dragState.isGliding || dragState.stopRafId !== 0;
 	                        const restoreTransition = () => {
 	                            waifuElement.style.transition = "";
 	                        };
@@ -1399,7 +1426,23 @@ const homeBannerHeight = "52vh";
 	                            animateToPosition(0, 0, { persist: true });
 	                            showWaifuMessage(randomPick(resetMessages));
 	                        };
-	                        const tryHandleDoubleTapReset = (clientX, clientY) => {
+	                        const wakeWaifu = () => {
+	                            try {
+	                                const sleepTimer = Number.parseInt(
+	                                    sessionStorage.getItem(waifuSleepTimerStorageKey) || "",
+	                                    10
+	                                );
+	                                if (Number.isFinite(sleepTimer)) {
+	                                    clearTimeout(sleepTimer);
+	                                }
+	                                sessionStorage.removeItem(waifuSleepTimerStorageKey);
+	                                sessionStorage.setItem(waifuSleepStorageKey, "0");
+	                            } catch (error) {
+	                                console.warn("Failed to update waifu sleep state.", error);
+	                            }
+	                            showWaifuMessage(randomPick(wakeUpMessages));
+	                        };
+	                        const handleWaifuTap = (clientX, clientY) => {
 	                            const now = performance.now();
 	                            const elapsed = now - tapState.lastTapTime;
 	                            const deltaDistance = Math.hypot(
@@ -1411,12 +1454,21 @@ const homeBannerHeight = "52vh";
 	                                deltaDistance <= tapResetMaxDistancePx
 	                            ) {
 	                                tapState.lastTapTime = 0;
-	                                resetWaifuPositionToCorner();
+	                                suppressCanvasClickUntil = now + tapResetMaxDelayMs;
+	                                if (isWaifuSleeping()) {
+	                                    wakeWaifu();
+	                                } else {
+	                                    resetWaifuPositionToCorner();
+	                                }
 	                                return true;
 	                            }
 	                            tapState.lastTapTime = now;
 	                            tapState.lastTapX = clientX;
 	                            tapState.lastTapY = clientY;
+	                            if (isWaifuSleeping()) {
+	                                suppressCanvasClickUntil = now + tapResetMaxDelayMs;
+	                                showWaifuMessage(randomPick(sleepingMessages));
+	                            }
 	                            return false;
 	                        };
 
@@ -1543,9 +1595,41 @@ const homeBannerHeight = "52vh";
                             );
                         };
 
-                        live2dElement.style.touchAction = "none";
+	                        live2dElement.style.touchAction = "none";
 
-                        waifuElement.addEventListener("pointerdown", (event) => {
+	                        // The Live2D runtime treats every window mousemove as a wake-up signal.
+	                        // Keep those events away from it until the explicit double tap wakes her.
+	                        window.addEventListener("mousemove", (event) => {
+	                            if (!isWaifuSleeping()) {
+	                                return;
+	                            }
+	                            event.stopImmediatePropagation();
+	                        }, true);
+
+	                        const keepSleepingUntilDoubleTap = (event) => {
+	                            if (!isWaifuSleeping()) {
+	                                return;
+	                            }
+	                            event.preventDefault();
+	                            event.stopImmediatePropagation();
+	                        };
+	                        live2dElement.addEventListener(
+	                            "mousedown",
+	                            keepSleepingUntilDoubleTap,
+	                            true
+	                        );
+	                        live2dElement.addEventListener("click", (event) => {
+	                            if (
+	                                !isWaifuSleeping() &&
+	                                performance.now() > suppressCanvasClickUntil
+	                            ) {
+	                                return;
+	                            }
+	                            event.preventDefault();
+	                            event.stopImmediatePropagation();
+	                        }, true);
+
+	                        waifuElement.addEventListener("pointerdown", (event) => {
                             if (!getIsAutoMoving()) {
                                 return;
                             }
@@ -1645,7 +1729,7 @@ const homeBannerHeight = "52vh";
 	                                Math.hypot(totalX, totalY) <= tapResetMaxMovementPx &&
 	                                dragDuration <= tapResetMaxDurationMs
 	                            ) {
-	                                if (tryHandleDoubleTapReset(event.clientX, event.clientY)) {
+	                                if (handleWaifuTap(event.clientX, event.clientY)) {
 	                                    return;
 	                                }
 	                            }
@@ -1694,11 +1778,16 @@ const homeBannerHeight = "52vh";
                             "喂，不许趁机乱碰。"
                         ];
 
-                        live2dElement.addEventListener("mousemove", (e) => {
-                            if (dragState.active || getIsAutoMoving()) {
-                                return;
-                            }
-                            const rect = live2dElement.getBoundingClientRect();
+	                        live2dElement.addEventListener("mousemove", (e) => {
+	                            if (dragState.active || getIsAutoMoving()) {
+	                                return;
+	                            }
+	                            if (isWaifuSleeping()) {
+	                                lastX = 0;
+	                                headPatCount = 0;
+	                                return;
+	                            }
+	                            const rect = live2dElement.getBoundingClientRect();
                             const x = e.clientX - rect.left;
                             const y = e.clientY - rect.top;
                             const isInHeadArea = x > 80 && x < 220 && y > 20 && y < 150;
@@ -1762,7 +1851,7 @@ const homeBannerHeight = "52vh";
 @tailwind components;
 @layer components {
 	.enable-banner {
-		--main-panel-top: calc(var(--banner-height) - 3.5rem);
+		--main-panel-top: calc(var(--banner-height) - 3.5rem + 5.5rem);
 	}
 	.enable-banner.is-home #banner-wrapper {
 		@apply h-[var(--home-banner-height-custom)] translate-y-[var(--banner-height-extend)]
@@ -1783,7 +1872,7 @@ const homeBannerHeight = "52vh";
 		display: none;
 	}
 	.enable-banner.is-home #main-grid {
-		transform: translateY(calc(var(--banner-height-extend) - 5.5rem));
+		transform: translateY(calc(var(--banner-height-extend) - 12rem));
 		position: relative;
 		isolation: isolate;
 	}
@@ -1805,22 +1894,22 @@ const homeBannerHeight = "52vh";
 	.enable-banner #top-row {
 		@apply h-[calc(var(--banner-height-home)_-_4.5rem)] transition-all duration-300
 	}
-	.enable-banner.is-home #sidebar-sticky {
-		@apply top-[calc(1rem_-_var(--banner-height-extend))]
-	}
 	.enable-banner.is-home #content-wrapper {
 		padding-bottom: 1.5rem;
-	}
-	.enable-banner.is-home #main-grid.home-main-grid #sidebar {
-		margin-top: -1.9rem;
 	}
 	.enable-banner.is-home #main-grid.home-main-grid #profile-card {
 		box-shadow:
 			0 28px 56px -34px rgba(0, 0, 0, 0.72),
 			0 0 0 1px rgba(255, 255, 255, 0.04);
 	}
+	.navbar-auto-hide-transition {
+		transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 320ms cubic-bezier(0.16, 1, 0.3, 1);
+		will-change: transform, opacity;
+	}
 	.navbar-hidden {
-		@apply opacity-0 -translate-y-16
+		@apply opacity-0;
+		transform: translateY(-100%);
+		pointer-events: none;
 	}
 }
 
@@ -2031,7 +2120,7 @@ function initPostNavScrollTransition() {
 function initCustomScrollbar() {
 	const bodyElement = document.querySelector('body');
 	if (!bodyElement) return;
-	OverlayScrollbars(
+	const bodyOs = OverlayScrollbars(
 		// docs say that a initialization to the body element would affect native functionality like window.scrollTo
 		// but just leave it here for now
 		{
@@ -2047,6 +2136,9 @@ function initCustomScrollbar() {
 			autoHideSuspend: false,
 		},
 	});
+	if (bodyOs && typeof scrollFunction === 'function') {
+		bodyOs.on('scroll', scrollFunction);
+	}
 
 	const katexElements = document.querySelectorAll('.katex-display') as NodeListOf<HTMLElement>;
 
@@ -2274,9 +2366,61 @@ if (window?.swup?.hooks) {
 	document.addEventListener('swup:enable', setup)
 }
 
+function getBodyScrollTop() {
+	const candidates = [document.documentElement, document.body];
+	const bodyOs = OverlayScrollbars(document.body);
+	if (bodyOs) {
+		candidates.push(bodyOs.elements().scrollOffsetElement);
+	}
+	return Math.max(...candidates.map((el) => el.scrollTop || 0));
+}
+
+window.getBodyScrollTop = getBodyScrollTop;
+
+function getScrollElement() {
+	const candidates = [document.documentElement, document.body];
+	const bodyOs = OverlayScrollbars(document.body);
+	if (bodyOs) {
+		candidates.push(bodyOs.elements().scrollOffsetElement);
+	}
+	return candidates.reduce((maxEl, el) => ((el.scrollTop || 0) > (maxEl.scrollTop || 0) ? el : maxEl), candidates[0]);
+}
+
+window.scrollToTopAnimated = function() {
+	const scrollElement = getScrollElement();
+	const start = scrollElement.scrollTop;
+	if (start <= 0) return;
+	const duration = 400;
+	const startTime = performance.now();
+	function easeOutCubic(t) {
+		return 1 - Math.pow(1 - t, 3);
+	}
+	function step(currentTime) {
+		const elapsed = currentTime - startTime;
+		const progress = Math.min(elapsed / duration, 1);
+		scrollElement.scrollTop = start * (1 - easeOutCubic(progress));
+		if (progress < 1) {
+			requestAnimationFrame(step);
+		}
+	}
+	requestAnimationFrame(step);
+}
+
 let backToTopBtn = document.getElementById('back-to-top-btn');
 let toc = document.getElementById('toc-wrapper');
 let navbar = document.getElementById('navbar-wrapper')
+let navbarAutoHideEnabled = false;
+let wasNavbarHidden = false;
+
+function readNavbarAutoHide() {
+	try {
+		navbarAutoHideEnabled = localStorage.getItem('navbarAutoHide') === 'true';
+	} catch {
+		navbarAutoHideEnabled = false;
+	}
+}
+readNavbarAutoHide();
+
 function scrollFunction() {
 	let bannerHeight = window.innerHeight * (BANNER_HEIGHT / 100)
 	const backToTopShowOffset = 260
@@ -2285,9 +2429,10 @@ function scrollFunction() {
 		document.documentElement.classList.contains('post-nav-visit');
 	const isPostPage = window.location.pathname.includes('/posts/')
 	backToTopBtn = document.getElementById('back-to-top-btn');
+	const scrollTop = getBodyScrollTop();
 
 	if (backToTopBtn) {
-		if (document.body.scrollTop > backToTopShowOffset || document.documentElement.scrollTop > backToTopShowOffset) {
+		if (scrollTop > backToTopShowOffset) {
 			backToTopBtn.classList.remove('hide')
 		} else {
 			backToTopBtn.classList.add('hide')
@@ -2297,35 +2442,73 @@ function scrollFunction() {
 	if (isBannerEnabled() && toc) {
 		if (isPostPage) {
 			toc.classList.remove('toc-hide')
-		} else if (document.body.scrollTop > bannerHeight || document.documentElement.scrollTop > bannerHeight) {
+		} else if (scrollTop > bannerHeight) {
 			toc.classList.remove('toc-hide')
 		} else {
 			toc.classList.add('toc-hide')
 		}
 	}
 
-	if (!isBannerEnabled()) return
 	if (navbar) {
-		if (isPostNavTransitionActive) {
+		if (!navbarAutoHideEnabled) {
 			navbar.classList.remove('navbar-hidden')
-			return
-		}
-		const NAVBAR_HEIGHT = 72
-		const MAIN_PANEL_EXCESS_HEIGHT = MAIN_PANEL_OVERLAPS_BANNER_HEIGHT * 16			// The height the main panel overlaps the banner
-
-		let bannerHeight = BANNER_HEIGHT
-		if (document.body.classList.contains('lg:is-home') && window.innerWidth >= 1024) {
-			bannerHeight = BANNER_HEIGHT_HOME
-		}
-		let threshold = window.innerHeight * (bannerHeight / 100) - NAVBAR_HEIGHT - MAIN_PANEL_EXCESS_HEIGHT - 16
-		if (document.body.scrollTop >= threshold || document.documentElement.scrollTop >= threshold) {
-			navbar.classList.add('navbar-hidden')
+			navbar.classList.remove('navbar-auto-hide-transition')
+			navbar.style.transform = ''
+			navbar.style.opacity = ''
+			navbar.style.pointerEvents = ''
+			wasNavbarHidden = false
 		} else {
-			navbar.classList.remove('navbar-hidden')
+			navbar.classList.add('navbar-auto-hide-transition')
+			const mainPanel = document.getElementById('main-panel-shell')
+			const topRow = document.getElementById('top-row')
+			if (mainPanel && topRow) {
+				const topRowRect = topRow.getBoundingClientRect()
+				const navbarHeight = navbar.offsetHeight
+				const navbarOriginalBottom = topRowRect.top + navbarHeight
+				const mainPanelTop = mainPanel.getBoundingClientRect().top
+				const overlap = navbarOriginalBottom - mainPanelTop
+				const shouldHide = overlap > 0
+				if (shouldHide && !navbar.classList.contains('navbar-hidden')) {
+					navbar.style.transform = ''
+					navbar.style.opacity = ''
+					navbar.style.pointerEvents = ''
+					navbar.classList.add('navbar-hidden')
+					const displaySetting = document.getElementById('display-setting')
+					if (displaySetting && !displaySetting.classList.contains('float-panel-closed')) {
+						displaySetting.classList.add('float-panel-closed')
+					}
+					wasNavbarHidden = true
+				} else if (!shouldHide && navbar.classList.contains('navbar-hidden')) {
+					navbar.classList.remove('navbar-hidden')
+					const displaySetting = document.getElementById('display-setting')
+					if (displaySetting && !displaySetting.classList.contains('float-panel-closed')) {
+						displaySetting.classList.add('float-panel-closed')
+					}
+					wasNavbarHidden = false
+				}
+			}
 		}
 	}
 }
 window.onscroll = scrollFunction
+document.body.addEventListener('scroll', scrollFunction, { passive: true });
+
+const bodyOsScroll = OverlayScrollbars(document.body);
+if (bodyOsScroll) {
+	bodyOsScroll.on('scroll', scrollFunction);
+}
+
+window.addEventListener('navbar-auto-hide-change', (event) => {
+	navbarAutoHideEnabled = Boolean((event as CustomEvent).detail);
+	if (!navbarAutoHideEnabled && navbar) {
+		navbar.classList.remove('navbar-hidden');
+		navbar.style.transform = '';
+		navbar.style.opacity = '';
+		navbar.style.pointerEvents = '';
+		wasNavbarHidden = false;
+	}
+	scrollFunction();
+});
 
 window.onresize = () => {
 	// calculate the --banner-height-extend, which needs to be a multiple of 4 to avoid blurry text

@@ -4,7 +4,7 @@ import { Icon } from "astro-icon/components";
 
 <!-- There can't be a filter on parent element, or it will break `fixed` -->
 <div class="back-to-top-wrapper">
-    <div id="back-to-top-btn" class="back-to-top back-to-top-btn hide flex items-center rounded-3xl overflow-hidden transition" onclick="backToTop()">
+    <div id="back-to-top-btn" class="back-to-top back-to-top-btn hide flex items-center rounded-3xl overflow-hidden" onclick="(window.scrollToTopAnimated || backToTop)()">
         <button aria-label="Back to Top" class="back-to-top-inner h-[3.75rem] w-[3.75rem]">
             <Icon name="material-symbols:keyboard-arrow-up-rounded" class="mx-auto"></Icon>
         </button>
@@ -35,12 +35,15 @@ import { Icon } from "astro-icon/components";
     transform: translateY(0) scale(1)
     pointer-events: auto
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38)
+    will-change: transform, opacity
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s cubic-bezier(0.22, 1, 0.36, 1)
     i
         font-size: 1.75rem
     &.hide
         transform: translateY(1.25rem) scale(0.92)
         opacity: 0
         pointer-events: none
+        will-change: auto
     &:active:not(.hide)
       transform: translateY(0) scale(0.95)
 
@@ -59,6 +62,22 @@ import { Icon } from "astro-icon/components";
 
 <script is:raw is:inline>
 function backToTop() {
-    window.scroll({ top: 0, behavior: 'smooth' });
+    const scrollElement = document.documentElement.scrollTop ? document.documentElement : document.body;
+    const start = scrollElement.scrollTop;
+    if (start <= 0) return;
+    const duration = 400;
+    const startTime = performance.now();
+    function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+    function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        scrollElement.scrollTop = start * (1 - easeOutCubic(progress));
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        }
+    }
+    requestAnimationFrame(step);
 }
 </script>

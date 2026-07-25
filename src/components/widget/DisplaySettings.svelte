@@ -18,6 +18,7 @@ import {
 	getDefaultHue,
 	getDeveloperModeEnabled,
 	getHue,
+	getNavbarAutoHide,
 	getRainbowMode,
 	getRainConfig,
 	getRainMode,
@@ -28,6 +29,7 @@ import {
 	setBackgroundIndex,
 	setDeveloperModeEnabled,
 	setHue,
+	setNavbarAutoHide,
 	setRainbowMode,
 	setRainConfig,
 	setRainMode,
@@ -50,6 +52,78 @@ let widthSlider: HTMLInputElement | null = null;
 let lengthSlider: HTMLInputElement | null = null;
 let speedSlider: HTMLInputElement | null = null;
 let angleSlider: HTMLInputElement | null = null;
+
+// ========== 毛玻璃效果 ==========
+let glassEnabled = true;
+let glassNavbar = true;
+let glassContent = false;
+let glassBlurIntensity = 16;
+let glassBlurSlider: HTMLInputElement;
+
+// ========== 导航栏智能隐藏 ==========
+let navbarAutoHide = getNavbarAutoHide();
+function handleNavbarAutoHide() {
+	navbarAutoHide = !navbarAutoHide;
+	setNavbarAutoHide(navbarAutoHide);
+}
+// ========== 导航栏智能隐藏结束 ==========
+
+// 毛玻璃 DOM 同步
+function syncGlassToDOM() {
+	if (typeof document === "undefined") return;
+	document.documentElement.classList.toggle(
+		"glass-navbar",
+		glassEnabled && glassNavbar,
+	);
+	document.documentElement.classList.toggle(
+		"glass-content",
+		glassEnabled && glassContent,
+	);
+	document.documentElement.style.setProperty(
+		"--glass-blur-intensity",
+		`${glassBlurIntensity}px`,
+	);
+}
+
+function saveGlass() {
+	try {
+		localStorage.setItem("glassEffectEnabled", String(glassEnabled));
+		localStorage.setItem("glassNavbarEnabled", String(glassNavbar));
+		localStorage.setItem("glassContentEnabled", String(glassContent));
+		localStorage.setItem("glassBlurIntensity", String(glassBlurIntensity));
+	} catch {
+		/* ignore */
+	}
+}
+
+function handleGlassToggle() {
+	glassEnabled = !glassEnabled;
+	syncGlassToDOM();
+	saveGlass();
+}
+function handleGlassNavbar() {
+	glassNavbar = !glassNavbar;
+	syncGlassToDOM();
+	saveGlass();
+}
+function handleGlassContent() {
+	glassContent = !glassContent;
+	syncGlassToDOM();
+	saveGlass();
+}
+function handleGlassBlur(e: Event) {
+	glassBlurIntensity = Number((e.currentTarget as HTMLInputElement).value);
+	syncGlassToDOM();
+	saveGlass();
+}
+
+// 响应式：同步滑块进度条
+$: if (typeof glassBlurSlider !== "undefined" && glassBlurSlider) {
+	const pct = ((glassBlurIntensity - 0) / (40 - 0)) * 100;
+	glassBlurSlider.style.setProperty("--slider-value", `${pct}%`);
+}
+// ========== 毛玻璃效果结束 ==========
+
 const backgroundCount = BACKGROUND_OPTIONS.length;
 let backgroundIndex = getInitialBackgroundIndex();
 let currentBackground = BACKGROUND_OPTIONS[backgroundIndex] ?? null;
@@ -59,6 +133,9 @@ const DEV_EDITOR_REDIRECT_PATH = "/editor";
 const DEV_EDITOR_TOAST_DURATION_MS = 1800;
 const DEV_EDITOR_REDIRECT_DELAY_MS = 500;
 const DEV_EDITOR_LOCK_REDIRECT_DELAY_MS = 500;
+// NOTE: This is a frontend-only "logout" trigger, NOT a security credential.
+// It simply clears local state and redirects away from editor pages.
+// All real authentication is enforced server-side via DEV_EDITOR_CODE env var.
 const DEV_EDITOR_OFF_CODE = "liyueoff";
 const DEV_EDITOR_LOCK_REDIRECT_PATH = "/";
 const DEV_EDITOR_UNLOCKED_MESSAGES = [
@@ -353,6 +430,21 @@ $: if (typeof document !== "undefined") {
 }
 
 onMount(() => {
+	// 毛玻璃：从 localStorage 恢复状态
+	try {
+		const v1 = localStorage.getItem("glassEffectEnabled");
+		if (v1 !== null) glassEnabled = v1 === "true";
+		const v2 = localStorage.getItem("glassNavbarEnabled");
+		if (v2 !== null) glassNavbar = v2 === "true";
+		const v3 = localStorage.getItem("glassContentEnabled");
+		if (v3 !== null) glassContent = v3 === "true";
+		const v4 = localStorage.getItem("glassBlurIntensity");
+		if (v4 !== null) glassBlurIntensity = Number(v4) || 16;
+	} catch {
+		/* ignore */
+	}
+	syncGlassToDOM();
+
 	if (portalHost && typeof document !== "undefined") {
 		document.body.appendChild(portalHost);
 	}
@@ -613,6 +705,71 @@ $: backgroundTypeLabel = currentBackground
             <input type="range" min="0" max="20" bind:value={backgroundBlur}
                    class="slider" step="1" style="width: 100%"
                    bind:this={backgroundBlurSlider}>
+        </div>
+    </div>
+
+    <!-- 毛玻璃效果 -->
+    <div class="mb-4">
+        <div class="flex flex-row gap-2 mb-3 items-center justify-between">
+            <div class="font-bold text-lg text-neutral-900 dark:text-neutral-100 transition relative ml-3
+                before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
+                before:absolute before:-left-3 before:top-[0.33rem]">
+                毛玻璃效果
+            </div>
+            <button class="relative inline-flex h-7 w-12 items-center rounded-full bg-[var(--btn-regular-bg)] transition-colors duration-200 ease-in-out"
+                    class:bg-[var(--primary)]={glassEnabled}
+                    on:click={handleGlassToggle}>
+                <span class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out"
+                      class:translate-x-5={glassEnabled}></span>
+            </button>
+        </div>
+        {#if glassEnabled}
+        <div class="flex flex-col gap-2 pl-3 mb-3 opacity-80 transition-opacity">
+            <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">导航栏</span>
+                <button class="relative inline-flex h-6 w-10 items-center rounded-full bg-[var(--btn-regular-bg)] transition-colors duration-200"
+                        class:bg-[var(--primary)]={glassNavbar}
+                        on:click={handleGlassNavbar}>
+                    <span class="inline-block h-4 w-4 rounded-full bg-white transition-transform duration-200"
+                          class:translate-x-4={glassNavbar}></span>
+                </button>
+            </label>
+            <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">内容区域</span>
+                <button class="relative inline-flex h-6 w-10 items-center rounded-full bg-[var(--btn-regular-bg)] transition-colors duration-200"
+                        class:bg-[var(--primary)]={glassContent}
+                        on:click={handleGlassContent}>
+                    <span class="inline-block h-4 w-4 rounded-full bg-white transition-transform duration-200"
+                          class:translate-x-4={glassContent}></span>
+                </button>
+            </label>
+        </div>
+        <div class="w-full select-none pl-3">
+            <div class="flex justify-between mb-1">
+                <span class="text-xs text-neutral-500">模糊强度</span>
+                <span class="text-xs font-medium text-[var(--primary)]">{glassBlurIntensity}px</span>
+            </div>
+            <input type="range" min="0" max="40" step="1" value={glassBlurIntensity}
+                   on:input={handleGlassBlur} bind:this={glassBlurSlider}
+                   class="slider" style="width: 100%">
+        </div>
+        {/if}
+    </div>
+
+    <!-- 导航栏自然顶出 -->
+    <div class="mb-4">
+        <div class="flex flex-row gap-2 items-center justify-between mb-3">
+            <div class="font-bold text-lg text-neutral-900 dark:text-neutral-100 transition relative ml-3
+                before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
+                before:absolute before:-left-3 before:top-[0.33rem]">
+                导航栏自然顶出
+            </div>
+            <button class="relative inline-flex h-7 w-12 items-center rounded-full bg-[var(--btn-regular-bg)] transition-colors duration-200 ease-in-out"
+                    class:bg-[var(--primary)]={navbarAutoHide}
+                    on:click={handleNavbarAutoHide}>
+                <span class="inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out"
+                      class:translate-x-5={navbarAutoHide}></span>
+            </button>
         </div>
     </div>
 

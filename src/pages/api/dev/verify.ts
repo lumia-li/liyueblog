@@ -59,7 +59,10 @@ function isValidPayload(payload: VerifyPayload, expectedCode: string): boolean {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-	const expectedCode = import.meta.env.DEV_EDITOR_CODE || "liyue233";
+	const expectedCode = import.meta.env.DEV_EDITOR_CODE;
+	if (!expectedCode) {
+		return json(500, { ok: false, message: "Server misconfigured: DEV_EDITOR_CODE not set" });
+	}
 	try {
 		const payload = await readVerifyPayload(request);
 		if (!(payload.devCode || payload.devCodeHash)) {
@@ -75,7 +78,10 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 export const GET: APIRoute = async ({ request }) => {
-	const expectedCode = import.meta.env.DEV_EDITOR_CODE || "liyue233";
+	const expectedCode = import.meta.env.DEV_EDITOR_CODE;
+	if (!expectedCode) {
+		return json(500, { ok: false, message: "Server misconfigured: DEV_EDITOR_CODE not set" });
+	}
 	const url = new URL(request.url);
 	const payload: VerifyPayload = {
 		devCode: url.searchParams.get("devCode") || "",

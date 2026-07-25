@@ -386,7 +386,7 @@ onMount(() => {
 :global(#main-grid),
 :global(#toc-wrapper),
 :global(#back-to-top-btn)
-  transition filter 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1)
+  transition filter 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1), transform 240ms cubic-bezier(0.22, 1, 0.36, 1)
 
 :global(body.dev-confirm-dialog-active #top-row),
 :global(body.dev-confirm-dialog-active #banner-wrapper),
