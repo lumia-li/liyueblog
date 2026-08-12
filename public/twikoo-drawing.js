@@ -58,6 +58,11 @@
       }
       .tk-drawing-color.active { border-color: #333; }
       .tk-drawing-uploading { opacity: .6; pointer-events: none; }
+      .tk-drawing-preview { display: none; }
+      .tk-drawing-preview-active .tk-drawing-toolbar,
+      .tk-drawing-preview-active .tk-drawing-canvas { display: none; }
+      .tk-drawing-preview-active .tk-drawing-preview { display: block; }
+      .tk-drawing-preview img { max-width: 100%; border: 1px dashed #ccc; border-radius: 4px; background: #fff; }
     `;
     document.head.appendChild(style);
   }
@@ -79,6 +84,9 @@
         <button type="button" class="tk-drawing-clear">清空</button>
       </div>
       <canvas class="tk-drawing-canvas"></canvas>
+      <div class="tk-drawing-preview">
+        <img src="" alt="涂鸦预览" />
+      </div>
     `;
     return wrap;
   }
@@ -127,6 +135,7 @@
     let strokes = [];
     let isUploading = false;
     let mode = 'text';
+    let isPreview = false;
 
     function getPos(e) {
       const rect = canvas.getBoundingClientRect();
@@ -275,15 +284,19 @@
     });
 
     toggleBtn.addEventListener('click', () => {
-      mode = mode === 'text' ? 'drawing' : 'text';
+      const wasDrawing = mode === 'drawing';
+      mode = wasDrawing ? 'text' : 'drawing';
       submitRoot.classList.toggle(ACTIVE_CLASS, mode === 'drawing');
       toggleBtn.textContent = mode === 'drawing' ? '文字' : '画板';
       if (mode === 'drawing') {
+        isPreview = false;
+        wrap.classList.remove('tk-drawing-preview-active');
         requestAnimationFrame(resizeCanvas);
       }
     });
 
     async function uploadDrawingAndTrigger(triggerBtn) {
+      if (isUploading || isBlank()) return;
       isUploading = true;
       triggerBtn.classList.add('tk-drawing-uploading');
 
@@ -301,6 +314,8 @@
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
 
         clearCanvas();
+        isPreview = false;
+        wrap.classList.remove('tk-drawing-preview-active');
         mode = 'text';
         submitRoot.classList.remove(ACTIVE_CLASS);
         toggleBtn.textContent = '画板';
@@ -323,14 +338,22 @@
       await uploadDrawingAndTrigger(sendBtn);
     }, true);
 
-    // 拦截预览按钮，同样先上传涂鸦
+    // 拦截预览按钮：本地预览，不上传
     const previewBtn = submitRoot.querySelector('.tk-preview');
     if (previewBtn) {
-      previewBtn.addEventListener('click', async (e) => {
+      previewBtn.addEventListener('click', (e) => {
         if (mode !== 'drawing' || isUploading || isBlank()) return;
         e.preventDefault();
         e.stopImmediatePropagation();
-        await uploadDrawingAndTrigger(previewBtn);
+        if (isPreview) {
+          isPreview = false;
+          wrap.classList.remove('tk-drawing-preview-active');
+          return;
+        }
+        const previewImg = wrap.querySelector('.tk-drawing-preview img');
+        if (previewImg) previewImg.src = canvas.toDataURL('image/png');
+        isPreview = true;
+        wrap.classList.add('tk-drawing-preview-active');
       }, true);
     }
   }
