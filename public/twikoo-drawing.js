@@ -111,8 +111,11 @@
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      if (canvas.width === width && canvas.height === height) return;
+      canvas.width = width;
+      canvas.height = height;
       redraw();
     }
 
@@ -127,8 +130,17 @@
 
     function getPos(e) {
       const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      let clientX, clientY;
+      if (e.touches && e.touches.length) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else if (e.changedTouches && e.changedTouches.length) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
       return { x: clientX - rect.left, y: clientY - rect.top };
     }
 
@@ -141,6 +153,7 @@
 
     function startStroke(e) {
       e.preventDefault();
+      if (canvas.width === 0 || canvas.height === 0) resizeCanvas();
       drawing = true;
       const pos = getPos(e);
       currentStroke = { color: penColor, width: penWidth, eraser: isEraser, points: [pos] };
@@ -205,12 +218,33 @@
       return strokes.length === 0;
     }
 
-    canvas.addEventListener('mousedown', startStroke);
-    canvas.addEventListener('mousemove', moveStroke);
-    window.addEventListener('mouseup', endStroke);
-    canvas.addEventListener('touchstart', startStroke, { passive: false });
-    canvas.addEventListener('touchmove', moveStroke, { passive: false });
-    window.addEventListener('touchend', endStroke);
+    if (window.PointerEvent) {
+      canvas.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { canvas.setPointerCapture(e.pointerId); } catch {}
+        startStroke(e);
+      });
+      canvas.addEventListener('pointermove', (e) => {
+        e.preventDefault();
+        moveStroke(e);
+      });
+      canvas.addEventListener('pointerup', (e) => {
+        endStroke();
+        try {
+          if (canvas.hasPointerCapture(e.pointerId)) {
+            canvas.releasePointerCapture(e.pointerId);
+          }
+        } catch {}
+      });
+      canvas.addEventListener('pointercancel', endStroke);
+    } else {
+      canvas.addEventListener('mousedown', startStroke);
+      canvas.addEventListener('mousemove', moveStroke);
+      window.addEventListener('mouseup', endStroke);
+      canvas.addEventListener('touchstart', startStroke, { passive: false });
+      canvas.addEventListener('touchmove', moveStroke, { passive: false });
+      window.addEventListener('touchend', endStroke);
+    }
 
     // 工具栏事件
     wrap.querySelectorAll('.tk-drawing-color').forEach((btn) => {
@@ -245,7 +279,7 @@
       submitRoot.classList.toggle(ACTIVE_CLASS, mode === 'drawing');
       toggleBtn.textContent = mode === 'drawing' ? '文字' : '画板';
       if (mode === 'drawing') {
-        resizeCanvas();
+        requestAnimationFrame(resizeCanvas);
       }
     });
 
