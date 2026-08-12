@@ -255,6 +255,23 @@
       window.addEventListener('touchend', endStroke);
     }
 
+    // 页面缩放/窗口大小变化时重新对齐画布分辨率，避免偏移和模糊
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => resizeCanvas());
+      ro.observe(wrap);
+    } else {
+      window.addEventListener('resize', resizeCanvas);
+    }
+
+    // 快捷键：Ctrl/Cmd + Z 撤销
+    document.addEventListener('keydown', (e) => {
+      if (mode !== 'drawing') return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    });
+
     // 工具栏事件
     wrap.querySelectorAll('.tk-drawing-color').forEach((btn) => {
       btn.addEventListener('click', () => {
