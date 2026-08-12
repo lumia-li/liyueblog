@@ -283,13 +283,9 @@
       }
     });
 
-    // 拦截发送按钮，先上传涂鸦
-    sendBtn.addEventListener('click', async (e) => {
-      if (mode !== 'drawing' || isUploading || isBlank()) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
+    async function uploadDrawingAndTrigger(triggerBtn) {
       isUploading = true;
-      sendBtn.classList.add('tk-drawing-uploading');
+      triggerBtn.classList.add('tk-drawing-uploading');
 
       try {
         const dataUrl = canvas.toDataURL('image/png');
@@ -308,16 +304,35 @@
         mode = 'text';
         submitRoot.classList.remove(ACTIVE_CLASS);
         toggleBtn.textContent = '画板';
-        sendBtn.classList.remove('tk-drawing-uploading');
+        triggerBtn.classList.remove('tk-drawing-uploading');
         isUploading = false;
 
-        sendBtn.click();
+        triggerBtn.click();
       } catch (err) {
         alert('涂鸦上传失败：' + (err.message || '未知错误'));
         isUploading = false;
-        sendBtn.classList.remove('tk-drawing-uploading');
+        triggerBtn.classList.remove('tk-drawing-uploading');
       }
+    }
+
+    // 拦截发送按钮，先上传涂鸦
+    sendBtn.addEventListener('click', async (e) => {
+      if (mode !== 'drawing' || isUploading || isBlank()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      await uploadDrawingAndTrigger(sendBtn);
     }, true);
+
+    // 拦截预览按钮，同样先上传涂鸦
+    const previewBtn = submitRoot.querySelector('.tk-preview');
+    if (previewBtn) {
+      previewBtn.addEventListener('click', async (e) => {
+        if (mode !== 'drawing' || isUploading || isBlank()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        await uploadDrawingAndTrigger(previewBtn);
+      }, true);
+    }
   }
 
   function scan() {
