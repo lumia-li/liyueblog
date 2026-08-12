@@ -1,0 +1,56 @@
+name: Update Twikoo
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-twikoo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Get latest Twikoo version
+        id: latest
+        run: |
+          LATEST=$(npm view twikoo version)
+          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest Twikoo version: $LATEST"
+
+      - name: Get current Twikoo version
+        id: current
+        run: |
+          CURRENT=$(grep -oP 't\.version="\K[^"]+' public/twikoo/twikoo.min.js || true)
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current Twikoo version: $CURRENT"
+
+      - name: Download latest Twikoo
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        run: |
+          curl -fsSL "https://cdn.jsdelivr.net/npm/twikoo@${{ steps.latest.outputs.version }}/dist/twikoo.min.js" -o public/twikoo/twikoo.min.js
+          DOWNLOADED=$(grep -oP 't\.version="\K[^"]+' public/twikoo/twikoo.min.js || true)
+          if [ "$DOWNLOADED" != "${{ steps.latest.outputs.version }}" ]; then
+            echo "Downloaded version mismatch: expected ${{ steps.latest.outputs.version }}, got $DOWNLOADED"
+            exit 1
+          fi
+
+      - name: Create Pull Request
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump twikoo to ${{ steps.latest.outputs.version }}"
+          title: "chore: bump twikoo to ${{ steps.latest.outputs.version }}"
+          body: |
+            检测到 Twikoo 新版本 `${{ steps.latest.outputs.version }}`，已更新 `public/twikoo/twikoo.min.js`。
+
+            - 原版本：${{ steps.current.outputs.version }}
+            - 新版本：${{ steps.latest.outputs.version }}
+          branch: chore/update-twikoo-${{ steps.latest.outputs.version }}
+          delete-branch: true
