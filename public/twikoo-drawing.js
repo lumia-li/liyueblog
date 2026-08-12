@@ -102,7 +102,7 @@
     actionsRow.insertBefore(toggleBtn, sendBtn);
 
     const wrap = createCanvasWrap();
-    inputWrap.appendChild(wrap);
+    inputWrap.parentNode.insertBefore(wrap, inputWrap.nextSibling);
 
     const canvas = wrap.querySelector('.tk-drawing-canvas');
     const ctx = canvas.getContext('2d');
