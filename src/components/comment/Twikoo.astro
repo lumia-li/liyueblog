@@ -11,7 +11,23 @@ const config = {
   </div>
 </div>
 <script is:inline define:vars={{ config }}>
-  // 优化：使用 Intersection Observer 实现懒加载
+
+  function loadDrawingScript() {
+    if (window.initTwikooDrawing) {
+      window.initTwikooDrawing();
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'twikoo-drawing-script';
+    script.src = '/twikoo-drawing.js';
+    script.defer = true;
+    script.onload = () => {
+      if (window.initTwikooDrawing) window.initTwikooDrawing();
+    };
+    script.onerror = () => console.error('涂鸦插件加载失败');
+    document.head.appendChild(script);
+  }
+
   function initTwikoo() {
     console.log('开始初始化 Twikoo 评论系统');
     const commentContainer = document.getElementById('comment');
@@ -20,9 +36,7 @@ const config = {
       return;
     }
 
-    // 直接初始化 Twikoo（如果已加载）
-    if (window.twikoo) {
-      console.log('Twikoo 已加载，直接初始化');
+    function doInit() {
       window.twikoo.init({
         ...config,
         envId: "https://twikoo.liyueovo.top",
@@ -31,43 +45,32 @@ const config = {
         visitor: true,
         onCommentLoaded: function() {
           console.log('评论加载完成');
+          loadDrawingScript();
         },
         onCommentPosted: function() {
           console.log('评论发送完成');
         }
       });
+    }
+
+    if (window.twikoo) {
+      console.log('Twikoo 已加载，直接初始化');
+      doInit();
       return;
     }
 
-    // 检查脚本是否已存在
     let script = document.getElementById('twikoo-script');
     if (!script) {
       console.log('创建新的 Twikoo 脚本标签');
-      // 使用本地脚本文件
       script = document.createElement('script');
       script.id = 'twikoo-script';
       script.src = '/twikoo/twikoo.min.js';
       script.defer = true;
 
-      // 脚本加载后初始化 Twikoo
       script.onload = () => {
         console.log('Twikoo 脚本加载完成');
         if (window.twikoo) {
-          console.log('Twikoo 初始化开始');
-          window.twikoo.init({
-            ...config,
-            envId: "https://twikoo.liyueovo.top",
-            lang: 'zh-CN',
-            region: 'cn',
-            visitor: true,
-            onCommentLoaded: function() {
-              console.log('评论加载完成');
-            },
-            onCommentPosted: function() {
-              console.log('评论发送完成');
-            }
-          });
-          console.log('Twikoo 初始化完成');
+          doInit();
         } else {
           console.error('Twikoo 加载失败，window.twikoo 未定义');
         }
@@ -75,7 +78,6 @@ const config = {
 
       script.onerror = () => {
         console.error('Twikoo 脚本加载失败');
-        const commentContainer = document.getElementById('comment');
         if (commentContainer) {
           commentContainer.innerHTML = `
             <div class="text-center text-red-500 dark:text-red-300 p-8">
@@ -167,6 +169,14 @@ const config = {
 
   // 设置 Swup 钩子
   setupSwupHooks();
+
+  // 兜底：某些自定义滚动容器下 IntersectionObserver 可能不触发，3 秒后强制初始化一次
+  setTimeout(() => {
+    if (!document.getElementById('twikoo-script') && !document.querySelector('.twikoo')) {
+      console.log('Twikoo 懒加载未触发，强制初始化');
+      initTwikoo();
+    }
+  }, 3000);
 </script>
 <style>
   .comment-container {
