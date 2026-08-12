@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   update-twikoo:
@@ -40,17 +39,12 @@ jobs:
             exit 1
           fi
 
-      - name: Create Pull Request
+      - name: Commit and push update
         if: steps.latest.outputs.version != steps.current.outputs.version
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: bump twikoo to ${{ steps.latest.outputs.version }}"
-          title: "chore: bump twikoo to ${{ steps.latest.outputs.version }}"
-          body: |
-            检测到 Twikoo 新版本 `${{ steps.latest.outputs.version }}`，已更新 `public/twikoo/twikoo.min.js`。
-
-            - 原版本：${{ steps.current.outputs.version }}
-            - 新版本：${{ steps.latest.outputs.version }}
-          branch: chore/update-twikoo-${{ steps.latest.outputs.version }}
-          delete-branch: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/twikoo/twikoo.min.js
+          git commit -m "chore: bump twikoo to ${{ steps.latest.outputs.version }}"
+          git pull --rebase origin main
+          git push origin main
