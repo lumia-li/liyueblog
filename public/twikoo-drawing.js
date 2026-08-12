@@ -291,6 +291,8 @@
       if (mode === 'drawing') {
         isPreview = false;
         wrap.classList.remove('tk-drawing-preview-active');
+        sendBtn.disabled = false;
+        sendBtn.classList.remove('is-disabled');
         requestAnimationFrame(resizeCanvas);
       }
     });
