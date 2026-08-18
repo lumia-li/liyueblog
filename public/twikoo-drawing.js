@@ -63,6 +63,36 @@
       .tk-drawing-preview-active .tk-drawing-canvas { display: none; }
       .tk-drawing-preview-active .tk-drawing-preview { display: block; }
       .tk-drawing-preview img { max-width: 100%; border: 1px dashed #ccc; border-radius: 4px; background: #fff; }
+      .tk-submit .tk-drawing-toggle {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 1.9rem !important;
+        height: 1.9rem !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        color: var(--tk-muted, #666) !important;
+        border: 1px solid transparent !important;
+        border-radius: 0.55rem !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        transition: color 160ms ease, background-color 160ms ease !important;
+      }
+      .tk-submit .tk-drawing-toggle svg {
+        width: 20px;
+        height: 20px;
+        display: block;
+        fill: currentColor;
+        stroke: currentColor;
+        stroke-width: 1.2px;
+        stroke-linejoin: round;
+        paint-order: stroke fill;
+        pointer-events: none;
+      }
+      .tk-submit .tk-drawing-toggle:hover {
+        color: var(--tk-text, #333) !important;
+        background: color-mix(in oklab, var(--primary, #333) 18%, transparent) !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -106,8 +136,19 @@
     const toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
     toggleBtn.className = 'el-button el-button--default el-button--small tk-drawing-toggle';
-    toggleBtn.textContent = '画板';
-    actionsRow.insertBefore(toggleBtn, sendBtn);
+    toggleBtn.title = '画板';
+    toggleBtn.setAttribute('aria-label', '画板');
+    toggleBtn.innerHTML =
+      '<svg t="1787047114327" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1704" width="200" height="200"><path d="M610.3552 197.6832a152.6784 152.6784 0 0 1 215.9104 215.9616l-448 448a32 32 0 0 1-22.6304 9.3696H184.9856a32 32 0 0 1-32-32v-170.7008c0-8.448 3.3792-16.5888 9.3696-22.6304l448-448z m107.9808 19.3024c-23.552 0-46.08 9.3696-62.72 25.9584l-438.6304 438.6304v125.44h125.44l438.6304-438.6304a88.6784 88.6784 0 0 0-62.72-151.3984z" p-id="1705"></path><path d="M567.7056 240.384a32 32 0 0 1 45.2608 0l170.6496 170.6496a32 32 0 1 1-45.2608 45.2608l-170.6496-170.6496a32 32 0 0 1 0-45.2608z" p-id="1706"></path></svg>';
+    // 放在相册按钮右面（相册按钮是 tk-row-actions-start 里第二个 .tk-submit-action-icon）
+    const albumIcon = actionsRow.querySelector(
+      '.tk-row-actions-start .tk-submit-action-icon:not(.OwO)',
+    );
+    if (albumIcon) {
+      albumIcon.insertAdjacentElement('afterend', toggleBtn);
+    } else {
+      actionsRow.appendChild(toggleBtn);
+    }
 
     const wrap = createCanvasWrap();
     inputWrap.parentNode.insertBefore(wrap, inputWrap.nextSibling);
@@ -304,7 +345,7 @@
       const wasDrawing = mode === 'drawing';
       mode = wasDrawing ? 'text' : 'drawing';
       submitRoot.classList.toggle(ACTIVE_CLASS, mode === 'drawing');
-      toggleBtn.textContent = mode === 'drawing' ? '文字' : '画板';
+      toggleBtn.classList.toggle('active', mode === 'drawing');
       if (mode === 'drawing') {
         isPreview = false;
         wrap.classList.remove('tk-drawing-preview-active');
@@ -337,7 +378,7 @@
         wrap.classList.remove('tk-drawing-preview-active');
         mode = 'text';
         submitRoot.classList.remove(ACTIVE_CLASS);
-        toggleBtn.textContent = '画板';
+        toggleBtn.classList.remove('active');
         triggerBtn.classList.remove('tk-drawing-uploading');
         isUploading = false;
 

@@ -1,0 +1,506 @@
+{
+	"mouseover": [
+		{
+			"selector": "#live2d",
+			"text": [
+				"Hey, hands off! ~",
+				"Y-your mouse is in the wrong place!",
+				"What are you doing?",
+				"Meow?",
+				"Eep (ノ≧∇≦)ノ",
+				"Help! Pervert!",
+				"If you keep this up, I'll fight back!",
+				"I'm gonna get mad now.",
+				"Stop groping me!",
+				"S-so shameless!"
+			]
+		},
+		{
+			"selector": "#waifu-tool-hitokoto",
+			"text": [
+				"Wonder what I'll say?",
+				"Wanna hear something?",
+				"Want to hear something?"
+			]
+		},
+		{
+			"selector": "#waifu-tool-asteroids",
+			"text": [
+				"Wanna play a space shooter?",
+				"This button says 'Do Not Click'.",
+				"Oh, you wanna play a game with me?",
+				"Heard this lets you rave!"
+			]
+		},
+		{
+			"selector": "#waifu-tool-switch-model",
+			"text": [
+				"Don't you love me anymore, boohoo~",
+				"Wanna meet my big sister?",
+				"Wanna see my little sister?",
+				"Switch the mascot?"
+			]
+		},
+		{
+			"selector": "#waifu-tool-switch-texture",
+			"text": [
+				"Like a costume change PLAY?",
+				"What shall we roleplay this time?",
+				"Transform!",
+				"Let's see what happens next!"
+			]
+		},
+		{
+			"selector": "#waifu-tool-photo",
+			"text": [
+				"Gonna take my photo? One, two, three~ cheese~",
+				"How about a selfie together?",
+				"Just keep smiling~"
+			]
+		},
+		{
+			"selector": "#waifu-tool-info",
+			"text": [
+				"Wanna know more about me?",
+				"This records my moving history.",
+				"What would you like to know about me?"
+			]
+		},
+		{
+			"selector": "#waifu-tool-mute",
+			"text": [
+				"Want me to hush for a bit?",
+				"Click and I'll stay quiet.",
+				"Switch me to mute mode?"
+			]
+		},
+		{
+			"selector": "#waifu-tool-quit",
+			"text": [
+				"Time to say goodbye?",
+				"Sob QAQ, see you later...",
+				"Don't abandon me...",
+				"Will we meet again...",
+				"Hmph, you'll regret it!"
+			]
+		},
+		{
+			"selector": "#nav-menu-switch",
+			"text": [
+				"On mobile, open the nav menu from here.",
+				"Wanna see the other page entries?"
+			]
+		},
+		{
+			"selector": ".menu-item-home",
+			"text": [
+				"Click to go home; use the browser back button to return.",
+				"Click it to go back home!",
+				"Head home for a look."
+			]
+		},
+		{
+			"selector": ".menu-item-about",
+			"text": [
+				"Wanna know who my master is?",
+				"Here are some secrets about my master, wanna see?",
+				"Found where the master hangs out!"
+			]
+		},
+		{
+			"selector": "#tags a, .post-meta-tags a",
+			"text": [
+				"Wanna check out the <span>{text}</span> tag?",
+				"Open <span>{text}</span> to keep browsing this topic."
+			]
+		},
+		{
+			"selector": "#categories a",
+			"text": [
+				"This is the <span>{text}</span> category, with {count} posts now. Wanna look inside?",
+				"Click <span>{text}</span> to see its {count} posts."
+			]
+		},
+		{
+			"selector": ".post-meta-category a",
+			"text": [
+				"This is the <span>{text}</span> category, wanna look inside?",
+				"Click <span>{text}</span> to see posts in this category."
+			]
+		},
+		{
+			"selector": "a[aria-label='Open Editor'], a[title='文章']",
+			"text": [
+				"You can enter the <span>{text}</span> editor right here.",
+				"Wanna write something? Just click <span>{text}</span>."
+			]
+		},
+		{
+			"selector": "a[aria-label='Open Drafts'], a[title='草稿']",
+			"text": [
+				"Check <span>{text}</span> first, maybe there's unfinished content.",
+				"Unfinished posts usually sit in <span>{text}</span>."
+			]
+		},
+		{
+			"selector": "a[aria-label='Open Trash'], a[title='垃圾桶']",
+			"text": [
+				"This is <span>{text}</span>, deleted posts are kept here temporarily.",
+				"Before cleaning up, you can confirm in <span>{text}</span>."
+			]
+		},
+		{
+			"selector": ".menu-item-archives",
+			"text": [
+				"Tired of paging? Check the post archive.",
+				"The post index is all organized here!"
+			]
+		},
+		{
+			"selector": ".links-of-author, .links-of-author a",
+			"text": [
+				"These are the master's usual external links.",
+				"Wanna visit other sites?",
+				"Some entrances to keep exploring."
+			]
+		},
+		{
+			"selector": ".menu-item-search",
+			"text": [
+				"Can't find what you want? Try searching!",
+				"Looking for something? Need help?"
+			]
+		},
+		{
+			"selector": ".menu-item",
+			"text": ["Quick, see what's here?"]
+		},
+		{
+			"selector": ".site-author, .profile-bio",
+			"text": ["Isn't my master pretty?", "This is my master (*´∇｀*)"]
+		},
+		{
+			"selector": ".site-state",
+			"text": ["These are the post stats~", "Wanna click in to see?"]
+		},
+		{
+			"selector": ".feed-link a",
+			"text": [
+				"You can subscribe via RSS here!",
+				"With a feed reader, you'll know when the blog updates."
+			]
+		},
+		{
+			"selector": ".cc-opacity",
+			"text": [
+				"Remember to credit when reposting.",
+				"All posts are licensed under CC BY-NC-SA 4.0~",
+				"Check the copyright license before reposting."
+			]
+		},
+		{
+			"selector": "#display-settings-switch, #display-setting",
+			"text": [
+				"You can tweak the theme and background here.",
+				"Wanna change the page vibe? Click to see!"
+			]
+		},
+		{
+			"selector": ".custom-md img, #post-cover img",
+			"text": ["Click the image to enlarge!"]
+		},
+		{
+			"selector": ".copy-btn",
+			"text": ["You can click to copy the code."]
+		},
+		{
+			"selector": ".expressive-code, .expressive-code .frame, .twikoo .code-block",
+			"text": [
+				"This code looks serious.",
+				"The code block is formatted for easier reading."
+			]
+		},
+		{
+			"selector": "a[href^='mailto']",
+			"text": ["I'll reply to emails promptly!", "Click to send an email~"]
+		},
+		{
+			"selector": "a[href*='?tag=']",
+			"text": [
+				"Wanna see the <span>{text}</span> tag?",
+				"Click to see all posts under this tag!"
+			]
+		},
+		{
+			"selector": "a[href*='?category='], a[href*='uncategorized=true']",
+			"text": [
+				"Wanna see the <span>{text}</span> category?",
+				"Click to see all posts under this category!"
+			]
+		},
+		{
+			"selector": ".post-title-link",
+			"text": ["Wanna read the post <span>{text}</span>?"]
+		},
+		{
+			"selector": "#toc a[href^='#']",
+			"text": [
+				"This is the post's table of contents.",
+				"Click to jump to that section."
+			]
+		},
+		{
+			"selector": ".beian a",
+			"text": [
+				"I'm a registered citizen too.",
+				"My master is a law-abiding master."
+			]
+		},
+		{
+			"selector": ".footer-link-astro",
+			"text": [
+				"This page is built with the Astro framework, impressive right?",
+				"Wanna see Astro? This whole site is built on it.",
+				"Astro is powerful, fast and stable for this kind of page."
+			]
+		},
+		{
+			"selector": ".footer-link-fuwari",
+			"text": [
+				"This is its author, very impressive.",
+				"Fuwari was made by them, really strong.",
+				"Wanna see Fuwari? This theme is brought by it."
+			]
+		},
+		{
+			"selector": ".nav-link .nav-text, .links-of-author a[target='_blank'], .footer-meta a[target='_blank'], .license-container a[target='_blank'], .custom-md a[href^='http']",
+			"text": [
+				"Wanna visit <span>{text}</span>?",
+				"Go explore <span>{text}</span>.",
+				"Check out <span>{text}</span>."
+			]
+		},
+		{
+			"selector": ".back-to-top",
+			"text": [
+				"Click it to go back to top!",
+				"Back to where it all began~",
+				"Wanna return to the start?"
+			]
+		},
+		{
+			"selector": "#toc-wrapper",
+			"text": [
+				"Wanna skim the full structure?",
+				"This organizes the TOC and visit stats."
+			]
+		},
+		{
+			"selector": ".post-nav-item[rel='next']",
+			"text": [
+				"Let's see the next post.",
+				"Click to read the next post!",
+				"Wanna flip to the next post?"
+			]
+		},
+		{
+			"selector": ".post-nav-item[rel='prev']",
+			"text": [
+				"Let's see the previous post.",
+				"Click to read the previous post!",
+				"Wanna flip to the previous post?"
+			]
+		},
+		{
+			"selector": ".extend.next",
+			"text": [
+				"Go to the next page.",
+				"Click to move forward!",
+				"Wanna flip to the next page?"
+			]
+		},
+		{
+			"selector": ".extend.prev",
+			"text": [
+				"Go to the previous page.",
+				"Click to go back!",
+				"Wanna flip to the previous page?"
+			]
+		},
+		{
+			"selector": ".tk-meta-input input",
+			"text": [
+				"Leave your nickname or contact.",
+				"Fill in info so we can recognize you later."
+			]
+		},
+		{
+			"selector": ".tk-submit textarea",
+			"text": [
+				"Wanna comment something?",
+				"Wanna say something?",
+				"Like the blog? Come leave a message for the master!"
+			]
+		},
+		{
+			"selector": ".tk-submit .tk-row-actions-start .tk-icon",
+			"text": [
+				"There are comment tools here.",
+				"Wanna add emoji or formatting to your comment?"
+			]
+		},
+		{
+			"selector": ".tk-submit .tk-preview",
+			"text": [
+				"Wanna preview your message?",
+				"Check how much negentropy your comment has!"
+			]
+		},
+		{
+			"selector": ".tk-submit .tk-send",
+			"text": [
+				"Be responsible for your words before sending~",
+				"Ready to submit? I'll read it carefully."
+			]
+		},
+		{
+			"selector": ".tk-comment .tk-content",
+			"text": [
+				"Wow, check out this awesome comment!",
+				"If you have questions, leave a message soon~"
+			]
+		}
+	],
+	"click": [
+		{
+			"selector": "#live2d",
+			"text": [
+				"Y-you bumped into me by accident...",
+				"What's a lolicon?",
+				"Did you see my teddy bear?",
+				"If you keep touching I'll call the police! ⌇●﹏●⌇",
+				"110? There's a pervert groping me here (ó﹏ò｡)",
+				"Stop touching, I'll tell my wife to beat you!",
+				"Why are you touching me! I'll bite you!",
+				"Don't touch me, nothing to touch!"
+			]
+		},
+		{
+			"selector": ".tk-submit textarea",
+			"text": [
+				"Wanna rant something?",
+				"Fill it in seriously meow~",
+				"Anything to say?"
+			]
+		},
+		{
+			"selector": ".tk-submit .tk-send",
+			"text": ["Click here to submit your comment~"]
+		}
+	],
+	"seasons": [
+		{
+			"date": "01/01",
+			"text": "<span>New Year</span> already, another year begins, this is {year}!"
+		},
+		{
+			"date": "02/14",
+			"text": "It's <span>Valentine's Day</span> again, found someone in {year}?"
+		},
+		{
+			"date": "03/08",
+			"text": "Today is <span>International Women's Day</span>!"
+		},
+		{
+			"date": "03/12",
+			"text": "Today is <span>Arbor Day</span>, protect the environment!"
+		},
+		{
+			"date": "04/01",
+			"text": "Secret~ <span>Today is April Fool's, don't get fooled~</span>"
+		},
+		{
+			"date": "05/01",
+			"text": "Today is <span>Labor Day</span>, planned your holiday?"
+		},
+		{
+			"date": "06/01",
+			"text": "<span>Children's Day</span>, happy times are short, wish we never grew up..."
+		},
+		{
+			"date": "09/03",
+			"text": "<span>Victory Day of the Chinese People's War of Resistance</span>, remember history, honor the martyrs, cherish peace, embrace the future."
+		},
+		{
+			"date": "09/10",
+			"text": "<span>Teachers' Day</span>, say hi to your teachers at school~"
+		},
+		{
+			"date": "10/01",
+			"text": "<span>National Day</span> is here, happy birthday to the motherland!"
+		},
+		{
+			"date": "11/05-11/12",
+			"text": "Who did you spend this year's <span>Singles' Day</span> with~"
+		},
+		{
+			"date": "12/20-12/31",
+			"text": "These days are <span>Christmas</span>, the master must be shopping again~"
+		}
+	],
+	"time": [
+		{
+			"hour": "6-7",
+			"text": "Good morning! The early bird catches the worm, a beautiful day begins~"
+		},
+		{
+			"hour": "8-11",
+			"text": "Good morning! Work going well? Don't sit too long, get up and move!"
+		},
+		{
+			"hour": "12-13",
+			"text": "Noon already, you worked all morning, it's lunch time!"
+		},
+		{
+			"hour": "14-17",
+			"text": "Easy to get sleepy in the afternoon, finished today's exercise goal?"
+		},
+		{
+			"hour": "18-19",
+			"text": "Evening! The sunset outside is beautiful, nothing beats a rosy sunset~"
+		},
+		{
+			"hour": "20-21",
+			"text": "Good evening, how was your day?"
+		},
+		{
+			"hour": "22-23",
+			"text": [
+				"It's so late, rest early, good night~",
+				"Take care of your eyes late at night!"
+			]
+		},
+		{
+			"hour": "0-5",
+			"text": "You're a night owl? So late and not asleep, can you get up tomorrow?"
+		}
+	],
+	"message": {
+		"notFoundWelcome": "This page seems lost, want me to take you somewhere else?",
+		"notFound": [
+			"Nothing here, look elsewhere.",
+			"404, go home or to the archive.",
+			"This road is blocked, let's take another."
+		],
+		"default": [
+			"Long time no see, time flies...",
+			"You big bully! How long since you talked to me, boohoo~",
+			"Hi~ come play with me!",
+			"Fist bump to your chest!",
+			"Remember to bookmark my little home!"
+		],
+		"console": "Haha, you opened the console, wanna see my little secrets?",
+		"copy": "What did you copy? Remember to credit the source when reposting!",
+		"visibilitychange": "Wow, you're back~"
+	}
+}

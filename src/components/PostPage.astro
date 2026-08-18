@@ -1,6 +1,5 @@
 ---
 import type { CollectionEntry } from "astro:content";
-import HomeBatchDeleteToolbar from "@components/editor/HomeBatchDeleteToolbar.svelte";
 import { getPostUrlBySlug } from "@utils/url-utils";
 import PostCard from "./PostCard.astro";
 
@@ -8,13 +7,8 @@ const { page } = Astro.props;
 
 let delay = 0;
 const interval = 50;
-const postSummaries = page.data.map((entry: CollectionEntry<"posts">) => ({
-	id: entry.id,
-	title: entry.data.title,
-}));
 ---
 <div class="transition flex flex-col rounded-[var(--radius-large)] bg-[var(--card-bg)] py-1 md:py-0 md:bg-transparent md:gap-4 mb-4 relative">
-    <HomeBatchDeleteToolbar client:only="svelte" posts={postSummaries} />
     {page.data.map((entry: CollectionEntry<"posts">) => (
         <PostCard
                 entry={entry}

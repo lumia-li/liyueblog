@@ -4,8 +4,8 @@ import { Icon } from "astro-icon/components";
 
 <!-- There can't be a filter on parent element, or it will break `fixed` -->
 <div class="back-to-top-wrapper">
-    <div id="back-to-top-btn" class="back-to-top back-to-top-btn hide flex items-center rounded-3xl overflow-hidden" onclick="(window.scrollToTopAnimated || backToTop)()">
-        <button aria-label="Back to Top" class="back-to-top-inner h-[3.75rem] w-[3.75rem]">
+    <div id="back-to-top-btn" class="back-to-top back-to-top-btn hide flex items-center rounded-3xl overflow-hidden">
+        <button type="button" aria-label="Back to Top" class="back-to-top-inner h-[3.75rem] w-[3.75rem]">
             <Icon name="material-symbols:keyboard-arrow-up-rounded" class="mx-auto"></Icon>
         </button>
     </div>
@@ -57,13 +57,17 @@ import { Icon } from "astro-icon/components";
     display: flex
     align-items: center
     justify-content: center
+    pointer-events: auto
 
 </style>
 
-<script is:raw is:inline>
+<script is:inline>
 function backToTop() {
-    const scrollElement = document.documentElement.scrollTop ? document.documentElement : document.body;
-    const start = scrollElement.scrollTop;
+    const candidates = [document.documentElement, document.body];
+    const osViewport = document.querySelector('.os-viewport');
+    if (osViewport) candidates.push(osViewport);
+    const scrollElement = candidates.reduce((maxEl, el) => ((el.scrollTop || 0) > (maxEl.scrollTop || 0) ? el : maxEl), candidates[0]);
+    const start = scrollElement.scrollTop || 0;
     if (start <= 0) return;
     const duration = 400;
     const startTime = performance.now();
@@ -79,5 +83,16 @@ function backToTop() {
         }
     }
     requestAnimationFrame(step);
+}
+
+const backToTopBtn = document.getElementById('back-to-top-btn');
+if (backToTopBtn) {
+    backToTopBtn.addEventListener('click', () => {
+        if (typeof window.scrollToTopAnimated === 'function') {
+            window.scrollToTopAnimated();
+        } else {
+            backToTop();
+        }
+    });
 }
 </script>

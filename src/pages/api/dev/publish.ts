@@ -6,6 +6,7 @@ import type { APIRoute } from "astro";
 export const prerender = false;
 
 type PublishRequest = {
+	type?: "post" | "thought";
 	title?: string;
 	slug?: string;
 	originalSlug?: string;
@@ -26,6 +27,7 @@ type GitHubFile = {
 };
 
 const POSTS_ROOT = "src/content/posts/";
+const THOUGHTS_ROOT = "src/content/thoughts/";
 
 function getLocalRepoAbsolutePath(repoPath: string): string {
 	return resolve(process.cwd(), repoPath);
@@ -63,6 +65,7 @@ async function parsePublishRequest(request: Request): Promise<PublishRequest> {
 	} catch {
 		const params = new URLSearchParams(raw);
 		return {
+			type: params.get("type") === "thought" ? "thought" : "post",
 			title: params.get("title") || "",
 			slug: params.get("slug") || "",
 			originalSlug: params.get("originalSlug") || "",
@@ -187,8 +190,9 @@ function collectEditorUploadRepoPaths(input: {
 	return Array.from(repoPaths);
 }
 
-function toRepoPath(slug: string): string {
-	return `${POSTS_ROOT}${slug}.md`;
+function toRepoPath(slug: string, type: string): string {
+	const root = type === "thought" ? THOUGHTS_ROOT : POSTS_ROOT;
+	return `${root}${slug}.md`;
 }
 
 function decodeGithubBase64(content: string): string {
@@ -426,6 +430,7 @@ async function deleteRepoFile(params: {
 }
 
 function buildMarkdown(payload: {
+	type?: string;
 	title: string;
 	published: string;
 	description: string;
@@ -436,6 +441,18 @@ function buildMarkdown(payload: {
 	content: string;
 }): string {
 	const published = payload.published || new Date().toISOString().slice(0, 10);
+
+	// 随笔模式：frontmatter 只保留 thoughts collection 支持的字段
+	if (payload.type === "thought") {
+		return `---
+title: ${toYamlString(payload.title)}
+published: ${published}
+description: ${toYamlString(payload.description)}
+---
+
+${payload.content.trim()}\n`;
+	}
+
 	const tagLines = payload.tags.length
 		? payload.tags.map((tag) => `  - ${toYamlString(tag)}`).join("\n")
 		: '  - ""';
@@ -492,9 +509,11 @@ export const POST: APIRoute = async ({ request }) => {
 		});
 	}
 
+	const type = body.type === "thought" ? "thought" : "post";
 	const title = (body.title || "").trim();
 	const content = (body.content || "").trim();
-	if (!title) {
+	// 随笔允许省略标题（随笔标题可选，frontmatter 中 title 可留空）
+	if (!title && type !== "thought") {
 		return json(400, { ok: false, message: "Title is required" });
 	}
 	if (!content) {
@@ -504,7 +523,7 @@ export const POST: APIRoute = async ({ request }) => {
 	const slugBase = (body.slug || "").trim() || title;
 	let slug = slugify(slugBase);
 	if (!slug) {
-		slug = `post-${Date.now()}`;
+		slug = type === "thought" ? `thought-${Date.now()}` : `post-${Date.now()}`;
 	}
 
 	const rawOriginalSlug = (body.originalSlug || "").trim();
@@ -513,8 +532,8 @@ export const POST: APIRoute = async ({ request }) => {
 		return json(400, { ok: false, message: "Original slug is invalid" });
 	}
 
-	const path = toRepoPath(slug);
-	const sourcePath = originalSlug ? toRepoPath(originalSlug) : path;
+	const path = toRepoPath(slug, type);
+	const sourcePath = originalSlug ? toRepoPath(originalSlug, type) : path;
 	const githubBase = `https://api.github.com/repos/${githubOwner}/${githubRepo}`;
 	const commonHeaders = {
 		Accept: "application/vnd.github+json",
@@ -576,6 +595,7 @@ export const POST: APIRoute = async ({ request }) => {
 		new Date().toISOString().slice(0, 10);
 
 	const markdown = buildMarkdown({
+		type,
 		title,
 		published,
 		description: (body.description || "").trim(),
@@ -639,11 +659,12 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 	}
 
+	const kind = type === "thought" ? "thought" : "post";
 	const commitMessage = originalSlug
 		? sourcePath === path
-			? `chore(post): update ${slug}`
-			: `chore(post): rename ${originalSlug} -> ${slug}`
-		: `feat(post): publish ${slug}`;
+			? `chore(${kind}): update ${slug}`
+			: `chore(${kind}): rename ${originalSlug} -> ${slug}`
+		: `feat(${kind}): publish ${slug}`;
 
 	let commitUrl = "";
 	try {

@@ -1,0 +1,70 @@
+---
+import { Icon } from "astro-icon/components";
+import Markdown from "@components/misc/Markdown.astro";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { formatDateToYYYYMMDD } from "@utils/date-utils";
+import { getSortedThoughts } from "@utils/thoughts-utils";
+import { url } from "@utils/url-utils";
+
+export async function getStaticPaths() {
+	const thoughts = await getSortedThoughts();
+	return thoughts.map((entry) => ({
+		params: { slug: entry.slug },
+		props: { entry },
+	}));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+---
+
+<MainGridLayout title={entry.data.title || "随笔"} description={entry.data.description || ""} setOGTypeArticle={true}>
+	<div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative mb-4">
+		<div id="post-container" class="card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full">
+			<!-- 日期 + 返回操作 -->
+			<div class="flex flex-row items-center justify-between text-black/30 dark:text-white/30 mb-3 transition onload-animation">
+				<div class="flex flex-row items-center">
+					<div class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2">
+						<Icon name="material-symbols:calendar-today-outline-rounded"></Icon>
+					</div>
+					<div class="text-sm">{formatDateToYYYYMMDD(entry.data.published)}</div>
+				</div>
+				<div class="flex flex-row gap-2">
+					<button type="button"
+						aria-label="返回上一页"
+						onclick="history.back()"
+						class="h-8 w-8 rounded-lg flex items-center justify-center bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/15 dark:hover:bg-white/15 hover:text-[var(--primary)] active:scale-95 transition">
+						<Icon name="material-symbols:arrow-back-rounded" class="text-[1.125rem]" />
+					</button>
+					<a href={url('/thoughts/')}
+						aria-label="返回随笔列表"
+						class="h-8 w-8 rounded-lg flex items-center justify-center bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60 hover:bg-black/15 dark:hover:bg-white/15 hover:text-[var(--primary)] active:scale-95 transition no-underline">
+						<Icon name="material-symbols:chat-bubble-outline-rounded" class="text-[1.125rem]" />
+					</a>
+				</div>
+			</div>
+
+			<!-- 标题 -->
+			{entry.data.title && (
+				<div class="relative onload-animation">
+					<div
+						data-pagefind-body data-pagefind-weight="10" data-pagefind-meta="title"
+						class="transition w-full block font-bold mb-3 text-3xl md:text-[2.25rem]/[2.75rem] text-black/90 dark:text-white/90"
+					>
+						{entry.data.title}
+					</div>
+				</div>
+			)}
+
+			<!-- 摘要 -->
+			{entry.data.description && (
+				<p class="text-75 mb-5 onload-animation">{entry.data.description}</p>
+			)}
+
+			<!-- 正文 -->
+			<Markdown class="mb-6 markdown-content onload-animation">
+				<Content />
+			</Markdown>
+		</div>
+	</div>
+</MainGridLayout>

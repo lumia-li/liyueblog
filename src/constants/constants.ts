@@ -1,5 +1,8 @@
 export const PAGE_SIZE = 8;
 
+// 随笔列表无限滚动：每批加载的条数
+export const THOUGHTS_BATCH_SIZE = 8;
+
 export const LIGHT_MODE = "light",
 	DARK_MODE = "dark",
 	AUTO_MODE = "auto";

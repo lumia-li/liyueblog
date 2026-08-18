@@ -148,11 +148,6 @@ const homeBannerHeight = "56vh";
 	// Apply background disabled state early to avoid flash
 	if (getBackgroundDisabledState()) {
 		root.classList.add('background-disabled');
-		// Self-heal: if assets exist, auto re-enable in case the flag got stuck
-		if (Array.isArray(backgrounds) && backgrounds.length > 0) {
-			try { localStorage.setItem('backgroundDisabled', 'false'); } catch {}
-			root.classList.remove('background-disabled');
-		}
 	} else {
 		root.classList.remove('background-disabled');
 	}
@@ -333,9 +328,8 @@ const homeBannerHeight = "56vh";
 			};
 			window.__toggleBackgroundDisplayMode = toggleBackgroundDisplayMode;
 			window.__getBackgroundDisplayMode = () => backgroundDisplayMode;
-			applyBackgroundDisplayMode(backgroundDisplayMode);
 
-			const getBannerElements = () => {
+		const getBannerElements = () => {
 				const banner = document.getElementById('banner');
 				if (!banner) {
 					return { banner: null, img: null };
@@ -803,10 +797,10 @@ const homeBannerHeight = "56vh";
 			
 			// Check if DOM is loaded before setting up background
 			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', () => {
-					setupBackground();
-					stripBackgroundTitleTooltips();
-					if (document.body) {
+			document.addEventListener('DOMContentLoaded', () => {
+				applyBackgroundDisplayMode(backgroundDisplayMode);
+				stripBackgroundTitleTooltips();
+				if (document.body) {
 						if (window.__backgroundTitleObserver) {
 							window.__backgroundTitleObserver.disconnect();
 						}
@@ -821,8 +815,8 @@ const homeBannerHeight = "56vh";
 					}
 				});
 			} else {
-				setupBackground();
-				stripBackgroundTitleTooltips();
+			applyBackgroundDisplayMode(backgroundDisplayMode);
+			stripBackgroundTitleTooltips();
 				if (document.body) {
 					if (window.__backgroundTitleObserver) {
 						window.__backgroundTitleObserver.disconnect();

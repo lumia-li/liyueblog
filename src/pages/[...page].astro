@@ -1,10 +1,15 @@
 ---
 import type { GetStaticPaths } from "astro";
+import { Icon } from "astro-icon/components";
 import Pagination from "../components/control/Pagination.astro";
 import PostPage from "../components/PostPage.astro";
 import { PAGE_SIZE } from "../constants/constants";
 import MainGridLayout from "../layouts/MainGridLayout.astro";
 import { getSortedPosts } from "../utils/content-utils";
+import { formatDateToYYYYMMDD } from "../utils/date-utils";
+import { getSortedThoughts } from "../utils/thoughts-utils";
+import { getThoughtUrlBySlug, url } from "../utils/url-utils";
+import HomeBatchDeleteToolbar from "../components/editor/HomeBatchDeleteToolbar.svelte";
 
 export const getStaticPaths = (async ({ paginate }) => {
 	const allBlogPosts = await getSortedPosts();
@@ -15,9 +20,45 @@ export const getStaticPaths = (async ({ paginate }) => {
 const { page } = Astro.props;
 
 const len = page.data.length;
+
+const postSummaries = page.data.map((entry) => ({
+	id: entry.id,
+	title: entry.data.title,
+}));
+
+// 仅在第一页显示「最近随笔」区块
+const recentThoughts =
+	page.currentPage === 1 ? (await getSortedThoughts()).slice(0, 3) : [];
 ---
 
 <MainGridLayout>
+    <HomeBatchDeleteToolbar client:only="svelte" posts={postSummaries} />
+    {recentThoughts.length > 0 && (
+        <section class="card-base w-full rounded-[var(--radius-large)] overflow-hidden relative px-6 py-6 md:px-9 md:py-7 mb-4 onload-animation">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-2xl font-bold text-90 flex items-center gap-2">
+                    <Icon name="material-symbols:chat-bubble-outline-rounded" class="text-[var(--primary)]"></Icon>
+                    最近随笔
+                </h2>
+                <a href={url("/thoughts/")} aria-label="查看全部随笔"
+                   class="link-lg text-50 text-sm font-medium hover:text-[var(--primary)] dark:hover:text-[var(--primary)] flex items-center gap-1">
+                    查看全部
+                    <Icon name="material-symbols:chevron-right-rounded" class="text-[var(--primary)]"></Icon>
+                </a>
+            </div>
+            <div class="flex flex-col">
+                {recentThoughts.map((t) => (
+                    <a href={getThoughtUrlBySlug(t.slug)} aria-label={t.data.title || "随笔"}
+                       class="group flex items-center gap-3 py-3 transition border-t-[1px] border-dashed border-black/10 dark:border-white/[0.15] first:border-t-0">
+                        <span class="text-50 text-sm whitespace-nowrap">{formatDateToYYYYMMDD(t.data.published)}</span>
+                        <span class="text-75 group-hover:text-[var(--primary)] transition line-clamp-1">
+                            {t.data.title || t.data.description || "随笔"}
+                        </span>
+                    </a>
+                ))}
+            </div>
+        </section>
+    )}
     <PostPage page={page}></PostPage>
     <Pagination class="mx-auto onload-animation" page={page} style={`animation-delay: calc(var(--content-delay) + ${(len)*50}ms)`}></Pagination>
 </MainGridLayout>

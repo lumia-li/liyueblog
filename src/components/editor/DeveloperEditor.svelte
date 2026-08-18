@@ -46,7 +46,15 @@ let editorHost: HTMLDivElement | null = null;
 let editor: EditorInstance | null = null;
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null;
 let markdownFileInputElement: HTMLInputElement | null = null;
+let modeSwitchElement: HTMLDivElement | null = null;
+let modeSwitchIndicatorTranslateX = 0;
+let modeSwitchIndicatorWidth = 0;
+let modeSwitchDragging = false;
+let modeSwitchDragStartPointerX = 0;
+let modeSwitchDragStartTranslateX = 0;
+let modeSwitchDragTranslateX = 0;
 
+let mode: "post" | "thought" = "post";
 let title = "";
 let slug = "";
 let originalSlug = "";
@@ -231,6 +239,17 @@ function toYamlScalar(value: string): string {
 
 function buildExportMarkdownContent(): string {
 	const normalizedContent = getEditorMarkdownNormalized().trim();
+	const publishedValue =
+		(published || "").trim() || new Date().toISOString().slice(0, 10);
+	if (mode === "thought") {
+		return `---
+title: ${toYamlScalar(title)}
+published: ${publishedValue}
+description: ${toYamlScalar(description)}
+---
+
+${normalizedContent}\n`;
+	}
 	const tagItems = tags
 		.split(",")
 		.map((item) => item.trim())
@@ -238,8 +257,6 @@ function buildExportMarkdownContent(): string {
 	const tagLines = tagItems.length
 		? tagItems.map((item) => `  - ${toYamlScalar(item)}`).join("\n")
 		: "  - ";
-	const publishedValue =
-		(published || "").trim() || new Date().toISOString().slice(0, 10);
 	return `---
 title: ${toYamlScalar(title)}
 published: ${publishedValue}
@@ -3766,12 +3783,20 @@ function getEffectiveSlugValue(rawSlug: string, rawTitle: string): string {
 	return slugify((rawSlug || "").trim() || (rawTitle || "").trim());
 }
 
+// 草稿是否属于当前编辑器模式（旧草稿无 type 字段，按文章处理）
+function draftMatchesMode(item: { type?: "post" | "thought" }): boolean {
+	return (item.type || "post") === mode;
+}
+
 function getLocalSlugConflictMessage(): string {
 	const currentSlug = getEffectiveSlugValue(slug, title);
 	if (!currentSlug) return "";
 
 	const duplicateCount = listDrafts().filter((item) => {
 		if (activeDraftId && item.id === activeDraftId) {
+			return false;
+		}
+		if (!draftMatchesMode(item)) {
 			return false;
 		}
 		return getEffectiveSlugValue(item.slug, item.title) === currentSlug;
@@ -3784,8 +3809,8 @@ function getLocalSlugConflictMessage(): string {
 function createDraftId(): string {
 	const base = slugify(slug || title) || "draft";
 	const usedIds = new Set([
-		...listDrafts().map((item) => item.id),
-		...listDraftTrash().map((item) => item.id),
+		...listDrafts().filter(draftMatchesMode).map((item) => item.id),
+		...listDraftTrash().filter(draftMatchesMode).map((item) => item.id),
 	]);
 	if (!usedIds.has(base)) {
 		return base;
@@ -3806,6 +3831,7 @@ function buildDraftId(): string {
 function buildDraftPayload() {
 	return {
 		id: buildDraftId(),
+		type: mode,
 		title,
 		slug,
 		originalSlug,
@@ -3834,6 +3860,7 @@ function persistDraft(silent = false, manual = false) {
 function applyDraft(payload: ReturnType<typeof getDraftById>) {
 	if (!payload) return;
 	activeDraftId = payload.id || "";
+	mode = payload.type || "post";
 	title = payload.title || "";
 	slug = payload.slug || "";
 	originalSlug = payload.originalSlug || "";
@@ -3878,11 +3905,111 @@ function tryLoadDraft() {
 		}
 		return;
 	}
-	const latest = listDrafts()[0] || null;
+	const latest = listDrafts().filter(draftMatchesMode)[0] || null;
 	if (!latest) return;
 	pendingDraftToLoad = latest;
 	showLoadDraftPrompt = true;
 	statusText = "检测到本地草稿";
+}
+
+// 切换文章/随笔模式：先保存当前模式的草稿，再重置表单并加载目标模式的最新草稿
+function switchEditorMode(nextMode: "post" | "thought") {
+	if (nextMode === mode) return;
+	if (editor && dirty) {
+		persistDraft(true);
+	}
+	activeDraftId = "";
+	title = "";
+	slug = "";
+	originalSlug = "";
+	description = "";
+	tags = "";
+	category = "";
+	image = "";
+	draft = false;
+	published = "";
+	userTouchedSlug = false;
+	mode = nextMode;
+	if (editor) {
+		editor.setMarkdown("");
+	}
+	dirty = false;
+	const latest = listDrafts().filter(draftMatchesMode)[0] || null;
+	if (latest) {
+		applyDraft(latest);
+		showNotice(`已切换到${nextMode === "thought" ? "随笔" : "文章"}模式`, "info");
+	} else {
+		statusText = `已切换到${nextMode === "thought" ? "随笔" : "文章"}模式`;
+		showNotice(`已切换到${nextMode === "thought" ? "随笔" : "文章"}模式，可以开始创作`, "info");
+	}
+}
+
+// 根据激活按钮实时定位滑块指示条
+function updateModeSwitchIndicator() {
+	if (!modeSwitchElement) return;
+	const active = modeSwitchElement.querySelector<HTMLButtonElement>(
+		"button.active",
+	);
+	if (!active) return;
+	modeSwitchIndicatorTranslateX = active.offsetLeft;
+	modeSwitchIndicatorWidth = active.offsetWidth;
+}
+
+function getModeSwitchButtonRects(): { left: number; width: number }[] {
+	if (!modeSwitchElement) return [];
+	return Array.from(
+		modeSwitchElement.querySelectorAll<HTMLButtonElement>("button"),
+	).map((btn) => ({ left: btn.offsetLeft, width: btn.offsetWidth }));
+}
+
+// 按下滑块开始拖拽（同时支持点击）
+function handleModeSwitchPointerDown(event: PointerEvent) {
+	if (!modeSwitchElement) return;
+	if (!(event.target instanceof Node)) return;
+	if (!modeSwitchElement.contains(event.target)) return;
+	modeSwitchDragging = true;
+	modeSwitchDragStartPointerX = event.clientX;
+	modeSwitchDragStartTranslateX = modeSwitchIndicatorTranslateX;
+	modeSwitchDragTranslateX = modeSwitchIndicatorTranslateX;
+	window.addEventListener("pointermove", handleModeSwitchPointerMove);
+	window.addEventListener("pointerup", handleModeSwitchPointerUp);
+}
+
+// 拖拽中：滑块跟随指针位移，但限制在两端按钮范围内
+function handleModeSwitchPointerMove(event: PointerEvent) {
+if (!modeSwitchDragging) return;
+const rects = getModeSwitchButtonRects();
+if (rects.length < 2) return;
+const minX = rects[0].left;
+const maxX = rects[rects.length - 1].left;
+const next =
+	modeSwitchDragStartTranslateX + (event.clientX - modeSwitchDragStartPointerX);
+modeSwitchDragTranslateX = Math.min(maxX, Math.max(minX, next));
+}
+
+// 释放：根据滑块位置判定离哪个模式更近并切换
+function handleModeSwitchPointerUp() {
+	if (!modeSwitchDragging) return;
+	modeSwitchDragging = false;
+	window.removeEventListener("pointermove", handleModeSwitchPointerMove);
+	window.removeEventListener("pointerup", handleModeSwitchPointerUp);
+	const rects = getModeSwitchButtonRects();
+	const activeIndex = mode === "post" ? 0 : 1;
+	let targetIndex = activeIndex;
+	let minDistance = Infinity;
+	rects.forEach((rect, index) => {
+		const distance = Math.abs(modeSwitchDragTranslateX - rect.left);
+		if (distance < minDistance) {
+			minDistance = distance;
+			targetIndex = index;
+		}
+	});
+	const targetMode: "post" | "thought" = targetIndex === 0 ? "post" : "thought";
+	if (targetMode !== mode) {
+		switchEditorMode(targetMode);
+	} else {
+		updateModeSwitchIndicator();
+	}
 }
 
 function localizeModeSwitchLabels() {
@@ -4320,7 +4447,7 @@ async function publishPost() {
 		return;
 	}
 	const content = getEditorMarkdownNormalized().trim();
-	if (!title.trim()) {
+	if (mode === "post" && !title.trim()) {
 		showNotice("标题不能为空", "error");
 		return;
 	}
@@ -4342,6 +4469,7 @@ async function publishPost() {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
+				type: mode,
 				title,
 				slug,
 				originalSlug,
@@ -4391,10 +4519,17 @@ $: if (title && !userTouchedSlug && !originalSlug) {
 
 $: localSlugConflictMessage = getLocalSlugConflictMessage();
 
+// 模式或滑块容器变化后，等 DOM 刷新再定位指示条
+$: if (modeSwitchElement) {
+	mode;
+	void tick().then(updateModeSwitchIndicator);
+}
+
 onMount(() => {
 	let disposed = false;
 	let editorInitializing = false;
 	let unbindEditorFocusTracking: (() => void) | null = null;
+	void tick().then(updateModeSwitchIndicator);
 	let unbindLinkPopupUrlNormalization: (() => void) | null = null;
 	let unbindEditorLinkTooltip: (() => void) | null = null;
 	let unbindEditorImagePreview: (() => void) | null = null;
@@ -4665,6 +4800,9 @@ onMount(() => {
 
 	return () => {
 		disposed = true;
+		modeSwitchDragging = false;
+		window.removeEventListener("pointermove", handleModeSwitchPointerMove);
+		window.removeEventListener("pointerup", handleModeSwitchPointerUp);
 		window.removeEventListener(
 			"developer-mode-change",
 			handleDeveloperModeChange as EventListener,
@@ -4685,8 +4823,47 @@ onMount(() => {
 >
 	<div class="editor-top">
 		<div>
-			<h1 class="text-xl font-bold text-[var(--btn-content)]">文章编辑器</h1>
-			<p class="text-sm text-neutral-400 mt-1">支持完整 Markdown，自动保存草稿</p>
+			<div class="editor-title-row">
+				<div
+					class="mode-switch"
+					role="tablist"
+					aria-label="编辑器模式"
+					bind:this={modeSwitchElement}
+					on:pointerdown={handleModeSwitchPointerDown}
+				>
+					<div
+						class="mode-switch-indicator"
+						class:dragging={modeSwitchDragging}
+						style={`transform:translateX(${modeSwitchDragging ? modeSwitchDragTranslateX : modeSwitchIndicatorTranslateX}px);width:${modeSwitchIndicatorWidth}px;`}
+					></div>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={mode === "post"}
+						class:active={mode === "post"}
+						on:click={() => switchEditorMode("post")}
+					>
+						文章
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={mode === "thought"}
+						class:active={mode === "thought"}
+						on:click={() => switchEditorMode("thought")}
+					>
+						随笔
+					</button>
+				</div>
+				<h1 class="text-xl font-bold text-[var(--btn-content)]">
+					{mode === "thought" ? "随笔编辑器" : "文章编辑器"}
+				</h1>
+			</div>
+			<p class="text-sm text-neutral-400 mt-1">
+				{mode === "thought"
+					? "随笔：标题可选，支持完整 Markdown，自动保存草稿"
+					: "支持完整 Markdown，自动保存草稿"}
+			</p>
 		</div>
 		<div class="top-actions">
 			<a class="drafts-btn" href="/drafts" data-no-swup>草稿箱</a>
@@ -4719,16 +4896,20 @@ onMount(() => {
 				{/if}
 			</div>
 			<input class="meta-input" type="text" placeholder="描述" bind:value={description} on:input={markDirty} />
-			<input class="meta-input" type="text" placeholder="标签（逗号分隔）" bind:value={tags} on:input={markDirty} />
-			<input class="meta-input" type="text" placeholder="分类（可选）" bind:value={category} on:input={markDirty} />
-			<input class="meta-input" type="text" placeholder="封面图 URL（可选）" bind:value={image} on:input={markDirty} />
+			{#if mode === "post"}
+				<input class="meta-input" type="text" placeholder="标签（逗号分隔）" bind:value={tags} on:input={markDirty} />
+				<input class="meta-input" type="text" placeholder="分类（可选）" bind:value={category} on:input={markDirty} />
+				<input class="meta-input" type="text" placeholder="封面图 URL（可选）" bind:value={image} on:input={markDirty} />
+			{/if}
 		</div>
-		<div class="editor-options">
-			<label class="draft-toggle">
-				<input type="checkbox" bind:checked={draft} on:change={markDirty} />
-				<span>设为草稿（不会在首页展示）</span>
-			</label>
-		</div>
+		{#if mode === "post"}
+			<div class="editor-options">
+				<label class="draft-toggle">
+					<input type="checkbox" bind:checked={draft} on:change={markDirty} />
+					<span>设为草稿（不会在首页展示）</span>
+				</label>
+			</div>
+		{/if}
 		<div class="editor-workspace" bind:this={editorWorkspaceElement}>
 			<div bind:this={editorHost} class="editor-host">
 				{#if !editor && !editorInitError}
@@ -5254,6 +5435,61 @@ onMount(() => {
   line-height 1.25
   letter-spacing 0.01em
   color var(--btn-content)
+
+.editor-title-row
+  display flex
+  flex-direction column
+  align-items flex-start
+  gap 0.5rem
+
+.mode-switch
+  position relative
+  display inline-flex
+  align-items center
+  gap 0.25rem
+  padding 0.2rem
+  border-radius 0.75rem
+  background var(--mode-switch-bg)
+  border 1px solid var(--mode-switch-border)
+
+.mode-switch-indicator
+  position absolute
+  top 0.2rem
+  bottom 0.2rem
+  left 0
+  width 0
+  border-radius 0.55rem
+  background var(--mode-switch-tab-active-bg)
+  border 1px solid var(--mode-switch-tab-active-border)
+  box-shadow 0 2px 8px rgba(0, 0, 0, 0.12)
+  pointer-events none
+  z-index 0
+  transition transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), width 0.28s cubic-bezier(0.22, 1, 0.36, 1)
+  &.dragging
+    transition none
+    cursor grabbing
+
+.mode-switch button
+  position relative
+  z-index 1
+  display inline-flex
+  align-items center
+  justify-content center
+  height 1.9rem
+  padding 0 0.75rem
+  line-height 1
+  font-size 0.85rem
+  font-weight 600
+  border 1px solid transparent
+  border-radius 0.55rem
+  background transparent
+  color var(--mode-switch-tab-color)
+  cursor pointer
+  transition background 0.18s ease, color 0.18s ease, border-color 0.18s ease
+  &:hover
+    color var(--primary)
+  &.active
+    color var(--mode-switch-tab-active-color)
 
 .editor-top > div:first-child p
   line-height 1.5

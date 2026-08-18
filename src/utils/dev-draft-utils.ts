@@ -1,3 +1,5 @@
+export type DevDraftType = "post" | "thought";
+
 export type DevDraft = {
 	id: string;
 	title: string;
@@ -10,6 +12,8 @@ export type DevDraft = {
 	draft: boolean;
 	content: string;
 	published?: string;
+	/** 草稿类型：post = 文章，thought = 随笔（缺省按文章处理，兼容旧数据） */
+	type?: DevDraftType;
 	updatedAt: number;
 };
 
@@ -154,6 +158,7 @@ export function restoreDraftFromTrash(id: string): DevDraft | null {
 		draft: draft.draft,
 		content: draft.content,
 		published: draft.published,
+		type: draft.type,
 	};
 	saveDraft({
 		...rest,
@@ -193,6 +198,7 @@ export function migrateLegacyDraft(): void {
 			draft: Boolean(legacy.draft),
 			content: legacy.content || "",
 			published: typeof legacy.published === "string" ? legacy.published : "",
+			type: "post",
 		});
 		localStorage.removeItem(LEGACY_DRAFT_KEY);
 	} catch {
