@@ -2,7 +2,7 @@
 title: "播控播放器 - Musicbar"
 published: 2026-09-04
 description: "一种控制主流音乐软件的播控"
-image: "https://i1.hdslb.com/bfs/new_dyn/7ba08dc03ac838b9c64619cea27e01f41689293875.png@1192w.avif"
+image: "cover-播控播放器-musicbar-1788517518997-h6gi64hq.webp"
 tags:
   - "软件"
 category: "开发"
