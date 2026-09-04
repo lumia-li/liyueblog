@@ -5403,33 +5403,31 @@ onMount(() => {
 						<div class="image-edit-title">编辑下方说明</div>
 						<button class="image-edit-close" type="button" on:click={closeImageCaptionDialog}>×</button>
 					</div>
-					<div class="image-edit-body">
+					<div class="caption-edit-body">
 						<img
 							class="caption-edit-preview"
 							src={captionEditSrc}
 							alt="图片预览"
 							draggable="false"
 						/>
-						<div class="image-edit-controls">
-							<label class="image-edit-caption-row">
-								<span class="image-edit-caption-label">下方说明</span>
-								<input
-									class="image-edit-input image-edit-caption-input"
-									type="text"
-									placeholder="可选，填了会显示在图片正下方"
-									bind:value={captionEditValue}
-									on:keydown={(event) => {
-										if (event.key === "Enter") {
-											event.preventDefault();
-											applyImageCaptionDialog();
-										}
-									}}
-								/>
-							</label>
-							<div class="image-edit-actions">
-								<button type="button" class="image-edit-btn secondary" on:click={closeImageCaptionDialog}>取消</button>
-								<button type="button" class="image-edit-btn primary" on:click={applyImageCaptionDialog}>应用</button>
-							</div>
+						<label class="image-edit-caption-row">
+							<span class="image-edit-caption-label">下方说明</span>
+							<input
+								class="image-edit-input image-edit-caption-input"
+								type="text"
+								placeholder="可选，填了会显示在图片正下方"
+								bind:value={captionEditValue}
+								on:keydown={(event) => {
+									if (event.key === "Enter") {
+										event.preventDefault();
+										applyImageCaptionDialog();
+									}
+								}}
+							/>
+						</label>
+						<div class="caption-edit-actions">
+							<button type="button" class="image-edit-btn secondary" on:click={closeImageCaptionDialog}>取消</button>
+							<button type="button" class="image-edit-btn primary" on:click={applyImageCaptionDialog}>应用</button>
 						</div>
 					</div>
 				</div>
@@ -6099,11 +6097,32 @@ onMount(() => {
   border 1px solid rgba(102, 155, 214, 0.58)
   box-shadow 0 20px 38px rgba(1, 7, 15, 0.6)
 
+.caption-edit-body
+  display flex
+  flex-direction column
+  gap 0.7rem
+  padding 0.8rem 0.9rem 0.9rem
+
+.caption-edit-body .image-edit-caption-row
+  width 100%
+  align-items center
+
+.caption-edit-body .image-edit-caption-input
+  flex 1
+  min-width 0
+  height 2.3rem
+
+.caption-edit-actions
+  display flex
+  justify-content flex-end
+  gap 0.45rem
+
 .caption-edit-preview
   display block
   width 100%
-  max-height 9rem
+  max-height 8rem
   object-fit contain
+  border-radius 0.5rem
   background rgba(17, 30, 46, 0.86)
 
 .image-edit-header
