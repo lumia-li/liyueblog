@@ -214,7 +214,9 @@ let isAppleDevice = false;
 let imageEditVisible = false;
 let imageEditSrc = "";
 let imageEditAlt = "";
-let imageEditCaption = "";
+let captionEditVisible = false;
+let captionEditSrc = "";
+let captionEditValue = "";
 let imageEditStageElement: HTMLDivElement | null = null;
 let imageEditPreviewImageElement: HTMLImageElement | null = null;
 let imageEditZoom = 1;
@@ -1893,6 +1895,10 @@ function bindEditorImagePreview(host: HTMLElement): () => void {
 			closeImageEditDialog();
 			return;
 		}
+		if (captionEditVisible) {
+			closeImageCaptionDialog();
+			return;
+		}
 		if (linkConfirmVisible) {
 			closeLinkConfirmDialog();
 			return;
@@ -1982,7 +1988,6 @@ function closeImageEditDialog() {
 	imageEditVisible = false;
 	imageEditSrc = "";
 	imageEditAlt = "";
-	imageEditCaption = "";
 	imageEditStageElement = null;
 	imageEditPreviewImageElement = null;
 	imageEditZoom = 1;
@@ -2035,9 +2040,6 @@ function openImageEditDialog(imageElement: HTMLImageElement | null) {
 		imageElement?.getAttribute("alt") ||
 		contextMenuImageAlt ||
 		""
-	).trim();
-	imageEditCaption = (
-		imageElement?.getAttribute("title") || ""
 	).trim();
 	imageEditVisible = true;
 	imageEditZoom = 1;
@@ -2769,17 +2771,6 @@ async function applyImageEditChanges() {
 			statusText = "编辑中...";
 		}
 	}
-	if (updateImageCaptionInMarkdown(currentSrc, imageEditCaption)) {
-		didChange = true;
-	}
-	if (contextMenuImageElement) {
-		const captionText = imageEditCaption.trim();
-		if (captionText) {
-			contextMenuImageElement.setAttribute("title", captionText);
-		} else {
-			contextMenuImageElement.removeAttribute("title");
-		}
-	}
 	if (!didChange) {
 		showNotice("未检测到可应用的改动", "error");
 		return;
@@ -2788,6 +2779,50 @@ async function applyImageEditChanges() {
 	persistDraft(true, true);
 	showNotice("图片修改已应用", "success");
 	closeImageEditDialog();
+}
+
+function openImageCaptionDialog(imageElement: HTMLImageElement | null) {
+	const src =
+		imageElement?.currentSrc || imageElement?.src || contextMenuImageSrc;
+	if (!src) {
+		showNotice("未找到图片地址", "error");
+		return;
+	}
+	captionEditSrc = src;
+	captionEditValue = (
+		imageElement?.getAttribute("title") || ""
+	).trim();
+	captionEditVisible = true;
+}
+
+function closeImageCaptionDialog() {
+	captionEditVisible = false;
+	captionEditSrc = "";
+	captionEditValue = "";
+}
+
+function applyImageCaptionDialog() {
+	const src = captionEditSrc || contextMenuImageSrc;
+	if (!src) {
+		showNotice("未找到图片地址", "error");
+		return;
+	}
+	const captionText = captionEditValue.trim();
+	const changed = updateImageCaptionInMarkdown(src, captionText);
+	if (contextMenuImageElement) {
+		if (captionText) {
+			contextMenuImageElement.setAttribute("title", captionText);
+		} else {
+			contextMenuImageElement.removeAttribute("title");
+		}
+	}
+	if (!changed) {
+		showNotice("说明内容未变化", "error");
+		return;
+	}
+	persistDraft(true, true);
+	showNotice(captionText ? "下方说明已更新" : "下方说明已清除", "success");
+	closeImageCaptionDialog();
 }
 
 function openEditorContextMenu(
@@ -3200,10 +3235,15 @@ function removeImageBySrc(targetSrc: string): boolean {
 }
 
 function handleImageContextMenuAction(
-	action: "preview" | "copy" | "delete" | "edit" | "deleteFile",
+	action: "preview" | "copy" | "delete" | "edit" | "editCaption" | "deleteFile",
 ) {
 	if (action === "edit") {
 		openImageEditDialog(contextMenuImageElement);
+		closeEditorContextMenu();
+		return;
+	}
+	if (action === "editCaption") {
+		openImageCaptionDialog(contextMenuImageElement);
 		closeEditorContextMenu();
 		return;
 	}
@@ -3390,7 +3430,8 @@ function bindEditorContextMenu(host: HTMLElement): () => void {
 			imagePreviewVisible ||
 			linkConfirmVisible ||
 			imageDeleteConfirmVisible ||
-			imageEditVisible
+			imageEditVisible ||
+			captionEditVisible
 		)
 			return;
 		const pathElements = getContextMenuPathElements(event);
@@ -5223,7 +5264,10 @@ onMount(() => {
 						复制图片地址
 					</button>
 					<button type="button" class="context-menu-item" on:click={() => handleImageContextMenuAction("edit")}>
-						调整大小 / 编辑下方说明
+						调整大小
+					</button>
+					<button type="button" class="context-menu-item" on:click={() => handleImageContextMenuAction("editCaption")}>
+						编辑下方说明
 					</button>
 					<button type="button" class="context-menu-item" on:click={() => handleImageContextMenuAction("delete")}>
 						删除图片引用
@@ -5335,20 +5379,56 @@ onMount(() => {
 									/>
 								</label>
 							</div>
-							<div class="image-edit-caption-row">
-							<span class="image-edit-caption-label">下方说明</span>
-							<input
-								class="image-edit-input image-edit-caption-input"
-								type="text"
-								placeholder="可选，填了会显示在图片正下方"
-								bind:value={imageEditCaption}
-							/>
-						</div>
-						<div class="image-edit-actions">
+							<div class="image-edit-actions">
 								<button type="button" class="image-edit-btn secondary" on:click={applyImageEditSourceRect}>指定尺寸</button>
 								<button type="button" class="image-edit-btn secondary" on:click={clearImageCropSelection}>清除裁切框</button>
 								<button type="button" class="image-edit-btn secondary" on:click={closeImageEditDialog}>取消</button>
 								<button type="button" class="image-edit-btn primary" on:click={applyImageEditChanges}>应用修改</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		{/if}
+		{#if captionEditVisible && captionEditSrc}
+			<div
+				class="image-edit-overlay"
+				role="dialog"
+				aria-modal="true"
+				aria-label="编辑下方说明"
+				transition:fade={{ duration: 160 }}
+			>
+				<div class="caption-edit-panel" transition:scale={{ duration: 190, easing: cubicOut, start: 0.96 }}>
+					<div class="image-edit-header">
+						<div class="image-edit-title">编辑下方说明</div>
+						<button class="image-edit-close" type="button" on:click={closeImageCaptionDialog}>×</button>
+					</div>
+					<div class="image-edit-body">
+						<img
+							class="caption-edit-preview"
+							src={captionEditSrc}
+							alt="图片预览"
+							draggable="false"
+						/>
+						<div class="image-edit-controls">
+							<label class="image-edit-caption-row">
+								<span class="image-edit-caption-label">下方说明</span>
+								<input
+									class="image-edit-input image-edit-caption-input"
+									type="text"
+									placeholder="可选，填了会显示在图片正下方"
+									bind:value={captionEditValue}
+									on:keydown={(event) => {
+										if (event.key === "Enter") {
+											event.preventDefault();
+											applyImageCaptionDialog();
+										}
+									}}
+								/>
+							</label>
+							<div class="image-edit-actions">
+								<button type="button" class="image-edit-btn secondary" on:click={closeImageCaptionDialog}>取消</button>
+								<button type="button" class="image-edit-btn primary" on:click={applyImageCaptionDialog}>应用</button>
 							</div>
 						</div>
 					</div>
@@ -6008,6 +6088,23 @@ onMount(() => {
   background rgba(10, 18, 29, 0.98)
   border 1px solid rgba(102, 155, 214, 0.58)
   box-shadow 0 20px 38px rgba(1, 7, 15, 0.6)
+
+.caption-edit-panel
+  width unquote('min(26rem, calc(100vw - 2rem))')
+  display flex
+  flex-direction column
+  border-radius 0.78rem
+  overflow hidden
+  background rgba(10, 18, 29, 0.98)
+  border 1px solid rgba(102, 155, 214, 0.58)
+  box-shadow 0 20px 38px rgba(1, 7, 15, 0.6)
+
+.caption-edit-preview
+  display block
+  width 100%
+  max-height 9rem
+  object-fit contain
+  background rgba(17, 30, 46, 0.86)
 
 .image-edit-header
   display flex
