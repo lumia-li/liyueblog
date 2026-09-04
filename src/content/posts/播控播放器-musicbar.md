@@ -36,6 +36,6 @@ draft: false
 
 ## 还想要更多了解？
 
-* [B站](https://member.bilibili.com/platform/upload-manager/opus)
+* [B站](hhttps://www.bilibili.com/opus/1239419934091509762)
 * [GitHub](https://github.com/lumia-li/Musicbar)
 * [抖音](https://www.douyin.com/user/self?modal_id=7672988738934377763)
