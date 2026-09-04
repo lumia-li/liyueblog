@@ -64,6 +64,57 @@ let category = "";
 let image = "";
 let draft = false;
 let published = "";
+let coverUploadBusy = false;
+let coverFileInputElement: HTMLInputElement | null = null;
+
+function triggerCoverUpload() {
+	if (coverUploadBusy) return;
+	coverFileInputElement?.click();
+}
+
+async function handleCoverFileChange(event: Event) {
+	const input = event.currentTarget as HTMLInputElement | null;
+	const file = input?.files?.[0];
+	if (!file || coverUploadBusy) return;
+	try {
+		coverUploadBusy = true;
+		statusText = "封面上传中...";
+		const devCodeHash = getStoredDevCredentialValue();
+		if (!devCodeHash) {
+			throw new Error("缺少开发者口令，请重新解锁开发者模式");
+		}
+		const formData = new FormData();
+		formData.append("file", file, file.name);
+		formData.append("devCodeHash", devCodeHash);
+		formData.append("slugBase", slug || title || "cover");
+		const response = await fetch("/api/dev/upload-cover", {
+			method: "POST",
+			body: formData,
+		});
+		const result = (await response.json().catch(() => ({}))) as {
+			ok?: boolean;
+			message?: string;
+			fileName?: string;
+		};
+		if (!response.ok || !result.ok || !result.fileName) {
+			throw new Error(result.message || "封面上传失败");
+		}
+		image = result.fileName;
+		markDirty();
+		statusText = "封面已上传";
+		showNotice(`封面已上传：${result.fileName}`, "success");
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "封面上传失败";
+		showNotice(message, "error");
+		statusText = "封面上传失败";
+	} finally {
+		coverUploadBusy = false;
+		if (input) {
+			input.value = "";
+		}
+	}
+}
 
 let isLocked = true;
 let isSubmitting = false;
@@ -5015,7 +5066,24 @@ onMount(() => {
 			{#if mode === "post"}
 				<input class="meta-input" type="text" placeholder="标签（逗号分隔）" bind:value={tags} on:input={markDirty} />
 				<input class="meta-input" type="text" placeholder="分类（可选）" bind:value={category} on:input={markDirty} />
-				<input class="meta-input" type="text" placeholder="封面图 URL（可选）" bind:value={image} on:input={markDirty} />
+				<div class="cover-field">
+					<input class="meta-input" type="text" placeholder="封面图 URL 或上传（可选）" bind:value={image} on:input={markDirty} />
+					<button
+						class="cover-upload-btn"
+						type="button"
+						disabled={coverUploadBusy}
+						on:click={triggerCoverUpload}
+					>
+						{coverUploadBusy ? "上传中..." : "上传封面"}
+					</button>
+					<input
+						bind:this={coverFileInputElement}
+						class="cover-file-input"
+						type="file"
+						accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+						on:change={handleCoverFileChange}
+					/>
+				</div>
 			{/if}
 		</div>
 		{#if mode === "post"}
@@ -5720,6 +5788,38 @@ onMount(() => {
   font-size 0.8rem
   line-height 1.4
   color unquote('color-mix(in oklab, var(--primary) 78%, var(--btn-content))')
+
+.cover-field
+  display flex
+  align-items stretch
+  gap 0.5rem
+  min-width 0
+  .meta-input
+    flex 1
+    min-width 0
+
+.cover-upload-btn
+  flex none
+  height 2.45rem
+  padding 0 0.9rem
+  border-radius 0.65rem
+  border 1px solid rgba(148, 163, 184, 0.36)
+  background var(--btn-regular-bg)
+  color var(--btn-content)
+  font-size 0.88rem
+  font-weight 650
+  white-space nowrap
+  cursor pointer
+  transition border-color 0.18s ease, background-color 0.18s ease, opacity 0.18s ease
+  &:hover:not(:disabled)
+    border-color var(--btn-regular-bg-hover)
+    background var(--btn-regular-bg-hover)
+  &:disabled
+    opacity 0.6
+    cursor default
+
+.cover-file-input
+  display none
 
 .editor-options
   display flex

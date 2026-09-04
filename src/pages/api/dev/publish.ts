@@ -161,6 +161,24 @@ function normalizeEditorUploadRepoPathFromUrl(rawUrl: string): string | null {
 	return `public${pathname}`;
 }
 
+// 编辑器上传的封面存放在文章目录（src/content/posts/），image 为相对文件名。
+// 发布时需要把这些本地封面也推送到 GitHub。
+function normalizePostCoverRepoPath(rawImage: string): string | null {
+	const value = rawImage.trim();
+	if (!value) return null;
+	if (value.startsWith("http://") || value.startsWith("https://") ||
+		value.startsWith("/") || value.startsWith("data:") || value.includes("\\")) {
+		return null;
+	}
+	if (value.includes("/") || value.includes("..")) {
+		return null;
+	}
+	if (!/\.(png|jpe?g|webp|gif|avif)$/i.test(value)) {
+		return null;
+	}
+	return `${POSTS_ROOT}${value}`;
+}
+
 function collectEditorUploadRepoPaths(input: {
 	content: string;
 	image: string;
@@ -173,6 +191,11 @@ function collectEditorUploadRepoPaths(input: {
 			repoPaths.add(repoPath);
 		}
 	};
+
+	const coverRepoPath = normalizePostCoverRepoPath(input.image);
+	if (coverRepoPath) {
+		repoPaths.add(coverRepoPath);
+	}
 
 	collectFromUrl(input.image);
 
