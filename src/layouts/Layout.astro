@@ -1227,6 +1227,8 @@ const homeBannerHeight = "56vh";
 	                            }, duration);
 	                            return true;
 	                        };
+	                        // 暴露给全局，供 Footer「本站已运行」等外部模块调用看板娘说话
+	                        window.showWaifuMessage = showWaifuMessage;
 	                        window.addEventListener("waifu:mutechange", hideWaifuMessage);
 	                        const updateToolbarSide = () => {
 	                            if (!waifuToolElement) {

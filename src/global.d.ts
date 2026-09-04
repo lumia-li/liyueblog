@@ -16,6 +16,13 @@ declare global {
 				}>;
 			}>;
 		};
+		showWaifuMessage?: (
+			text: string,
+			duration?: number,
+			options?: {
+				force?: boolean;
+			}
+		) => boolean;
 	}
 }
 
