@@ -13,6 +13,25 @@ const className = Astro.props.class;
     <slot/>
 </div>
 
+<style is:global>
+/* 正文图片水平居中：未填满容器宽度的图片显示在中间而非左侧 */
+.custom-md img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+/* 图片下方说明文字（来自 markdown 图片 title，如 ![说明](url "标题")） */
+.custom-md .img-caption {
+    display: block;
+    text-align: center;
+    margin-top: 0.35rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #81868F;
+}
+</style>
+
 <script>
 document.addEventListener("click", function (e: MouseEvent) {
     const target = e.target as Element | null;

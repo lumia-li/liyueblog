@@ -163,6 +163,7 @@ let isAppleDevice = false;
 let imageEditVisible = false;
 let imageEditSrc = "";
 let imageEditAlt = "";
+let imageEditCaption = "";
 let imageEditStageElement: HTMLDivElement | null = null;
 let imageEditPreviewImageElement: HTMLImageElement | null = null;
 let imageEditZoom = 1;
@@ -1930,6 +1931,7 @@ function closeImageEditDialog() {
 	imageEditVisible = false;
 	imageEditSrc = "";
 	imageEditAlt = "";
+	imageEditCaption = "";
 	imageEditStageElement = null;
 	imageEditPreviewImageElement = null;
 	imageEditZoom = 1;
@@ -1982,6 +1984,9 @@ function openImageEditDialog(imageElement: HTMLImageElement | null) {
 		imageElement?.getAttribute("alt") ||
 		contextMenuImageAlt ||
 		""
+	).trim();
+	imageEditCaption = (
+		imageElement?.getAttribute("title") || ""
 	).trim();
 	imageEditVisible = true;
 	imageEditZoom = 1;
@@ -2165,6 +2170,51 @@ function replaceImageSourceInMarkdown(
 		);
 	}
 	if (next === markdown) return false;
+	editor.setMarkdown(next);
+	markDirty();
+	return true;
+}
+
+function sanitizeImageCaptionText(caption: string): string {
+	return caption.trim().replace(/\\/g, "").replace(/"/g, "&quot;");
+}
+
+function updateImageCaptionInMarkdown(
+	targetSrc: string,
+	caption: string,
+): boolean {
+	if (!editor || !targetSrc) return false;
+	const markdown = editor.getMarkdown();
+	const escapedTargetSrc = escapeRegex(targetSrc);
+	const markdownImagePattern = new RegExp(
+		`!\\[([^\\]]*)\\]\\((?:<)?${escapedTargetSrc}(?:>)?(\\s+["'][^"']*["'])?\\)`,
+		"i",
+	);
+	const trimmed = caption.trim();
+	if (!trimmed) {
+		const removalPattern = new RegExp(
+			`(!\\[[^\\]]*\\]\\((?:<)?${escapedTargetSrc}(?:>)?)\\s+["'][^"']*["']?(\\))`,
+			"i",
+		);
+		const next = markdown.replace(removalPattern, "$1$2");
+		if (next === markdown) return false;
+		editor.setMarkdown(next);
+		markDirty();
+		return true;
+	}
+	const safeCaption = sanitizeImageCaptionText(trimmed);
+	let changed = false;
+	const next = markdown.replace(
+		markdownImagePattern,
+		(full, altText = "", titlePart = "") => {
+			changed = true;
+			const existingTitle = typeof titlePart === "string" ? titlePart.trim() : "";
+			const desired = ` "${safeCaption}"`;
+			if (existingTitle === desired) return full;
+			return `![${altText}](${targetSrc}${desired})`;
+		},
+	);
+	if (!changed || next === markdown) return false;
 	editor.setMarkdown(next);
 	markDirty();
 	return true;
@@ -2666,6 +2716,17 @@ async function applyImageEditChanges() {
 			return;
 		} finally {
 			statusText = "编辑中...";
+		}
+	}
+	if (updateImageCaptionInMarkdown(currentSrc, imageEditCaption)) {
+		didChange = true;
+	}
+	if (contextMenuImageElement) {
+		const captionText = imageEditCaption.trim();
+		if (captionText) {
+			contextMenuImageElement.setAttribute("title", captionText);
+		} else {
+			contextMenuImageElement.removeAttribute("title");
 		}
 	}
 	if (!didChange) {
@@ -3178,6 +3239,55 @@ async function confirmDeleteImageFile(): Promise<void> {
 	} finally {
 		imageDeleteBusy = false;
 	}
+}
+
+function bindEditorImageCaptions(host: HTMLElement): () => void {
+	const applyCaptions = () => {
+		const images = host.querySelectorAll<HTMLImageElement>(
+			".toastui-editor-md-preview img, .toastui-editor-preview img, .toastui-editor-viewer img",
+		);
+		for (const image of images) {
+			const title = (image.getAttribute("title") || "").trim();
+			const sibling = image.nextElementSibling;
+			const existing =
+				sibling instanceof HTMLElement &&
+				sibling.classList.contains("dev-img-caption")
+					? sibling
+					: null;
+			if (!title) {
+				existing?.remove();
+				continue;
+			}
+			if (existing) {
+				if (existing.textContent !== title) existing.textContent = title;
+				continue;
+			}
+			const caption = document.createElement("span");
+			caption.className = "dev-img-caption";
+			caption.textContent = title;
+			image.after(caption);
+		}
+	};
+	let frame = 0;
+	const scheduleApply = () => {
+		if (frame) cancelAnimationFrame(frame);
+		frame = window.requestAnimationFrame(() => {
+			frame = 0;
+			applyCaptions();
+		});
+	};
+	const observer = new MutationObserver(scheduleApply);
+	observer.observe(host, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ["title"],
+	});
+	scheduleApply();
+	return () => {
+		observer.disconnect();
+		if (frame) cancelAnimationFrame(frame);
+	};
 }
 
 function getContextMenuPathElements(event: MouseEvent): Element[] {
@@ -4533,6 +4643,7 @@ onMount(() => {
 	let unbindLinkPopupUrlNormalization: (() => void) | null = null;
 	let unbindEditorLinkTooltip: (() => void) | null = null;
 	let unbindEditorImagePreview: (() => void) | null = null;
+	let unbindEditorImageCaptions: (() => void) | null = null;
 	let unbindEditorSaveShortcut: (() => void) | null = null;
 	let unbindEditorContextMenu: (() => void) | null = null;
 	let unbindToolbarInlineMarkCoexistence: (() => void) | null = null;
@@ -4573,6 +4684,10 @@ onMount(() => {
 		if (unbindEditorImagePreview) {
 			unbindEditorImagePreview();
 			unbindEditorImagePreview = null;
+		}
+		if (unbindEditorImageCaptions) {
+			unbindEditorImageCaptions();
+			unbindEditorImageCaptions = null;
 		}
 		if (unbindEditorSaveShortcut) {
 			unbindEditorSaveShortcut();
@@ -4705,6 +4820,7 @@ onMount(() => {
 					bindLinkPopupUrlNormalization(hostForFocusTracking);
 				unbindEditorLinkTooltip = bindEditorLinkTooltip(hostForFocusTracking);
 				unbindEditorImagePreview = bindEditorImagePreview(hostForFocusTracking);
+				unbindEditorImageCaptions = bindEditorImageCaptions(hostForFocusTracking);
 				unbindEditorSaveShortcut = bindEditorSaveShortcut(hostForFocusTracking);
 				unbindEditorContextMenu = bindEditorContextMenu(hostForFocusTracking);
 				unbindToolbarInlineMarkCoexistence =
@@ -5039,7 +5155,7 @@ onMount(() => {
 						复制图片地址
 					</button>
 					<button type="button" class="context-menu-item" on:click={() => handleImageContextMenuAction("edit")}>
-						调整大小
+						调整大小 / 编辑下方说明
 					</button>
 					<button type="button" class="context-menu-item" on:click={() => handleImageContextMenuAction("delete")}>
 						删除图片引用
@@ -5151,7 +5267,16 @@ onMount(() => {
 									/>
 								</label>
 							</div>
-							<div class="image-edit-actions">
+							<div class="image-edit-caption-row">
+							<span class="image-edit-caption-label">下方说明</span>
+							<input
+								class="image-edit-input image-edit-caption-input"
+								type="text"
+								placeholder="可选，填了会显示在图片正下方"
+								bind:value={imageEditCaption}
+							/>
+						</div>
+						<div class="image-edit-actions">
 								<button type="button" class="image-edit-btn secondary" on:click={applyImageEditSourceRect}>指定尺寸</button>
 								<button type="button" class="image-edit-btn secondary" on:click={clearImageCropSelection}>清除裁切框</button>
 								<button type="button" class="image-edit-btn secondary" on:click={closeImageEditDialog}>取消</button>
@@ -5922,6 +6047,18 @@ onMount(() => {
 .image-edit-tip
   font-size 0.78rem
   color rgba(163, 195, 228, 0.82)
+
+.image-edit-caption-row
+  display flex
+  align-items center
+  gap 0.45rem
+  .image-edit-caption-label
+    font-size 0.78rem
+    color rgba(163, 195, 228, 0.82)
+    white-space nowrap
+  .image-edit-caption-input
+    flex 1
+    min-width 0
 
 .image-edit-actions
   margin-top auto
@@ -7282,6 +7419,14 @@ onMount(() => {
   background var(--editor-popup-input-bg) !important
   box-shadow 0 0 0 3px var(--editor-popup-accent-soft) !important
   outline none !important
+
+:global(.toastui-editor-md-preview .dev-img-caption)
+  display block
+  text-align center
+  margin 0.15rem 0 1.35rem
+  font-size 0.86rem
+  line-height 1.5
+  color #81868F
 
 :global(.toastui-editor-popup-add-image .toastui-editor-button-container)
   margin-top 0.82rem !important

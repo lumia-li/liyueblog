@@ -2552,12 +2552,38 @@ function createPhotoSwipe() {
 	lightbox.init()
 }
 
+function applyArticleImageCaptions() {
+	const images = document.querySelectorAll<HTMLImageElement>(".custom-md img")
+	images.forEach((img) => {
+		const title = (img.getAttribute("title") || "").trim()
+		const sibling = img.nextElementSibling
+		const existing =
+			sibling instanceof HTMLElement && sibling.classList.contains("img-caption")
+				? sibling
+				: null
+		if (!title) {
+			existing?.remove()
+			return
+		}
+		if (existing) {
+			if (existing.textContent !== title) existing.textContent = title
+			return
+		}
+		const caption = document.createElement("span")
+		caption.className = "img-caption"
+		caption.textContent = title
+		img.after(caption)
+	})
+}
+
 const setup = () => {
 	if (!lightbox) {
 		createPhotoSwipe()
 	}
+	applyArticleImageCaptions()
 	window.swup.hooks.on("page:view", () => {
 		createPhotoSwipe()
+		applyArticleImageCaptions()
 	})
 
 	window.swup.hooks.on(
