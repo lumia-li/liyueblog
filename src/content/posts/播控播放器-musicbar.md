@@ -13,9 +13,9 @@ draft: false
 * 可以控制常见的音乐软件，网易云，汽水，酷狗等等，还可以放置在任务栏中，针对于windows11优化
 
 看看截图\~
-![默认样式](https://raw.githubusercontent.com/lumia-li/liyueblog/main/public/uploads/editor/2026/09/04/image-1788506513457-1788506513259-6z3so1dc.png)
-![简洁模式](https://raw.githubusercontent.com/lumia-li/liyueblog/main/public/uploads/editor/2026/09/04/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE-2026-09-04-152248-1788506585042-dlohvmv3.png)
-![放置在任务栏](https://raw.githubusercontent.com/lumia-li/liyueblog/main/public/uploads/editor/2026/09/04/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE-2026-09-04-152345-1788506646451-0h325nsm.png)
+![默认样式](https://raw.githubusercontent.com/lumia-li/liyueblog/main/public/uploads/editor/2026/09/04/image-1788506513457-1788506513259-6z3so1dc.png "默认模式")
+![简洁模式](https://raw.githubusercontent.com/lumia-li/liyueblog/main/public/uploads/editor/2026/09/04/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE-2026-09-04-152248-1788506585042-dlohvmv3.png "简洁模式")
+![放置在任务栏](https://raw.githubusercontent.com/lumia-li/liyueblog/main/public/uploads/editor/2026/09/04/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE-2026-09-04-152345-1788506646451-0h325nsm.png "拖动到任务栏状态")
 
 软件有四显示模式，在下面说明一下，图中也展示了：
 * 默认模式
