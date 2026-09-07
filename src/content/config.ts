@@ -29,6 +29,8 @@ const thoughtsCollection = defineCollection({
 		title: z.string().optional().default(""),
 		published: z.date(),
 		description: z.string().optional().default(""),
+		trashed: z.boolean().optional().default(false),
+		trashedAt: z.string().optional().default(""),
 	}),
 });
 export const collections = {

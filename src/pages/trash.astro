@@ -1,9 +1,12 @@
 ﻿---
+import ThoughtTrashManager from "@components/editor/ThoughtTrashManager.svelte";
 import TrashManager from "@components/editor/TrashManager.svelte";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
 ---
 
-<MainGridLayout title="垃圾桶" description="开发者模式删除文章管理">
-	<TrashManager client:only="svelte" />
+<MainGridLayout title="垃圾桶" description="开发者模式删除文章与随笔管理">
+	<div class="card-base flex w-full flex-col gap-6 rounded-[var(--radius-large)] p-4 md:p-6">
+		<TrashManager client:only="svelte" />
+		<ThoughtTrashManager client:only="svelte" />
+	</div>
 </MainGridLayout>
-

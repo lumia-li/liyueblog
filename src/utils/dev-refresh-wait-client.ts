@@ -4,8 +4,11 @@ function normalizePostId(postId: string): string {
 
 function postIdToSlug(postId: string): string {
 	let normalized = normalizePostId(postId);
-	if (normalized.startsWith("src/content/posts/")) {
-		normalized = normalized.slice("src/content/posts/".length);
+	for (const root of ["src/content/posts/", "src/content/thoughts/"]) {
+		if (normalized.startsWith(root)) {
+			normalized = normalized.slice(root.length);
+			break;
+		}
 	}
 	normalized = normalized.replace(/\.md$/i, "");
 	if (normalized.endsWith("/index")) {
@@ -14,20 +17,24 @@ function postIdToSlug(postId: string): string {
 	return normalized;
 }
 
-function buildEncodedPostPath(slug: string): string {
+function buildEncodedPath(slug: string, kind: "post" | "thought"): string {
 	const encodedSlug = slug
 		.split("/")
 		.map((part) => encodeURIComponent(part))
 		.join("/");
-	return `/posts/${encodedSlug}/`;
+	return kind === "thought" ? `/thoughts/${encodedSlug}/` : `/posts/${encodedSlug}/`;
 }
 
-function buildMarkers(postIds: string[], titles: string[]): string[] {
+function buildMarkers(
+	postIds: string[],
+	titles: string[],
+	kind: "post" | "thought",
+): string[] {
 	const markers = new Set<string>();
 	for (const postId of postIds) {
 		const slug = postIdToSlug(postId);
 		if (!slug) continue;
-		markers.add(buildEncodedPostPath(slug));
+		markers.add(buildEncodedPath(slug, kind));
 	}
 	for (const title of titles) {
 		const trimmed = title.trim();
@@ -47,6 +54,7 @@ export async function waitForPostsToDisappear(params: {
 	pageUrl: string;
 	postIds: string[];
 	titles?: string[];
+	kind?: "post" | "thought";
 	timeoutMs?: number;
 	intervalMs?: number;
 }): Promise<boolean> {
@@ -54,7 +62,8 @@ export async function waitForPostsToDisappear(params: {
 		return false;
 	}
 
-	const markers = buildMarkers(params.postIds, params.titles || []);
+	const kind = params.kind || "post";
+	const markers = buildMarkers(params.postIds, params.titles || [], kind);
 	if (markers.length < 1) {
 		return true;
 	}

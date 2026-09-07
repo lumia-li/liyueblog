@@ -6,7 +6,7 @@ import PostPage from "../components/PostPage.astro";
 import { PAGE_SIZE } from "../constants/constants";
 import MainGridLayout from "../layouts/MainGridLayout.astro";
 import { getSortedPosts } from "../utils/content-utils";
-import { formatDateToYYYYMMDD } from "../utils/date-utils";
+import { formatThoughtPublished } from "../utils/date-utils";
 import { getSortedThoughts } from "../utils/thoughts-utils";
 import { getThoughtUrlBySlug, url } from "../utils/url-utils";
 import HomeBatchDeleteToolbar from "../components/editor/HomeBatchDeleteToolbar.svelte";
@@ -50,7 +50,7 @@ const recentThoughts =
                 {recentThoughts.map((t) => (
                     <a href={getThoughtUrlBySlug(t.slug)} aria-label={t.data.title || "随笔"}
                        class="group flex items-center gap-3 py-3 transition border-t-[1px] border-dashed border-black/10 dark:border-white/[0.15] first:border-t-0">
-                        <span class="text-50 text-sm whitespace-nowrap">{formatDateToYYYYMMDD(t.data.published)}</span>
+                        <span class="text-50 text-sm whitespace-nowrap">{formatThoughtPublished(t.data.published)}</span>
                         <span class="text-75 group-hover:text-[var(--primary)] transition line-clamp-1">
                             {t.data.title || t.data.description || "随笔"}
                         </span>

@@ -634,7 +634,7 @@ onMount(() => {
 });
 </script>
 
-<div class="card-base rounded-[var(--radius-large)] p-4 md:p-6">
+<div class="trash-root">
 	<div class="trash-head">
 		<div>
 			<h1 class="text-xl font-bold text-[var(--btn-content)]">垃圾桶</h1>
@@ -647,6 +647,8 @@ onMount(() => {
 			on:click={() => {
 				void loadPosts();
 				loadDraftTrashItems();
+				// 顶部统一的刷新按钮同时刷新随笔垃圾桶
+				window.dispatchEvent(new CustomEvent("trash-posts-updated"));
 			}}
 			disabled={loading || isLocked}
 		>

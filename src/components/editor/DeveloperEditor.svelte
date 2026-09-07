@@ -293,8 +293,11 @@ function toYamlScalar(value: string): string {
 
 function buildExportMarkdownContent(): string {
 	const normalizedContent = getEditorMarkdownNormalized().trim();
+	const nowIso = new Date().toISOString();
+	// 随笔精确到时刻（供随笔列表展示时间段）；文章保持仅日期
 	const publishedValue =
-		(published || "").trim() || new Date().toISOString().slice(0, 10);
+		(published || "").trim() ||
+		(mode === "thought" ? nowIso : nowIso.slice(0, 10));
 	if (mode === "thought") {
 		return `---
 title: ${toYamlScalar(title)}

@@ -256,17 +256,34 @@ function unquoteYamlValue(rawValue: string): string {
 	return value;
 }
 
-function normalizePublished(input: string | undefined): string {
+function normalizePublished(
+	input: string | undefined,
+	options?: { keepTime?: boolean },
+): string {
 	const value = (input || "").trim();
 	if (!value) return "";
-	return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+	if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+	// 随笔需要保留具体时刻，如 2026-09-08T02:38:15.000Z 或 2026-09-08 10:38:15
+	if (
+		options?.keepTime &&
+		/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/i.test(
+			value,
+		)
+	) {
+		return value;
+	}
+	return "";
 }
 
-function readPublishedFromMarkdown(markdown: string): string {
+function readPublishedFromMarkdown(
+	markdown: string,
+	options?: { keepTime?: boolean },
+): string {
 	const parsed = splitFrontmatter(markdown);
 	if (!parsed) return "";
 	return normalizePublished(
 		unquoteYamlValue(parseFrontmatterValue(parsed.frontmatter, "published")),
+		options,
 	);
 }
 
@@ -463,7 +480,11 @@ function buildMarkdown(payload: {
 	draft: boolean;
 	content: string;
 }): string {
-	const published = payload.published || new Date().toISOString().slice(0, 10);
+	const published =
+		payload.published ||
+		(payload.type === "thought"
+			? new Date().toISOString()
+			: new Date().toISOString().slice(0, 10));
 
 	// 随笔模式：frontmatter 只保留 thoughts collection 支持的字段
 	if (payload.type === "thought") {
@@ -613,9 +634,13 @@ export const POST: APIRoute = async ({ request }) => {
 	}
 
 	const published =
-		readPublishedFromMarkdown(existingSourceFile?.content || "") ||
-		normalizePublished(body.published) ||
-		new Date().toISOString().slice(0, 10);
+		readPublishedFromMarkdown(existingSourceFile?.content || "", {
+			keepTime: type === "thought",
+		}) ||
+		normalizePublished(body.published, { keepTime: type === "thought" }) ||
+		(type === "thought"
+			? new Date().toISOString()
+			: new Date().toISOString().slice(0, 10));
 
 	const markdown = buildMarkdown({
 		type,

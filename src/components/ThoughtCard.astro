@@ -1,6 +1,6 @@
 ---
 import { Icon } from "astro-icon/components";
-import { formatDateToYYYYMMDD } from "../utils/date-utils";
+import { formatThoughtPublished } from "../utils/date-utils";
 
 interface Props {
 	class?: string;
@@ -31,7 +31,7 @@ const className = Astro.props.class;
 			<div class="meta-icon">
 				<Icon name="material-symbols:calendar-today-outline-rounded" class="text-xl"></Icon>
 			</div>
-			<span class="text-50 text-sm font-medium">{formatDateToYYYYMMDD(published)}</span>
+			<span class="text-50 text-sm font-medium">{formatThoughtPublished(published)}</span>
 		</div>
 		<Icon
 			name="material-symbols:chevron-right-rounded"

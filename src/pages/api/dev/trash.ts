@@ -9,6 +9,7 @@ type TrashAction = "list" | "move" | "restore" | "delete";
 
 type TrashRequest = {
 	action?: TrashAction;
+	kind?: string;
 	postId?: string;
 	postIds?: string[] | string;
 	devCode?: string;
@@ -29,6 +30,22 @@ type TrashedPost = {
 };
 
 const POSTS_ROOT = "src/content/posts/";
+const THOUGHTS_ROOT = "src/content/thoughts/";
+
+type Kind = "post" | "thought";
+
+function normalizeKind(input: string | undefined): Kind {
+	return input === "thought" ? "thought" : "post";
+}
+
+function getKindRoot(kind: Kind): string {
+	return kind === "thought" ? THOUGHTS_ROOT : POSTS_ROOT;
+}
+
+function getKindCommitLabel(kind: Kind): string {
+	return kind === "thought" ? "thought" : "post";
+}
+
 const TRASH_LIST_READ_CONCURRENCY = 8;
 const TRASH_LIST_CACHE_TTL_MS = 30_000;
 
@@ -43,8 +60,9 @@ const trashedPostsCache = new Map<string, TrashedPostsCacheEntry>();
 function getTrashedPostsCacheKey(params: {
 	githubBase: string;
 	branch: string;
+	kind: Kind;
 }): string {
-	return `${params.githubBase}::${params.branch}`;
+	return `${params.githubBase}::${params.branch}::${params.kind}`;
 }
 
 function cloneTrashedPosts(posts: TrashedPost[]): TrashedPost[] {
@@ -72,7 +90,14 @@ function clearCachedTrashedPosts(params: {
 	githubBase: string;
 	branch: string;
 }): void {
-	trashedPostsCache.delete(getTrashedPostsCacheKey(params));
+	for (const kind of ["post", "thought"] as const) {
+		trashedPostsCache.delete(
+			getTrashedPostsCacheKey({
+				...params,
+				kind,
+			}),
+		);
+	}
 }
 
 async function mapWithConcurrency<T, R>(
@@ -161,6 +186,7 @@ async function parseTrashRequest(request: Request): Promise<TrashRequest> {
 		const params = new URLSearchParams(raw);
 		return {
 			action: (params.get("action") || "") as TrashAction,
+			kind: params.get("kind") || "",
 			postId: params.get("postId") || "",
 			devCode: params.get("devCode") || "",
 			devCodeHash: params.get("devCodeHash") || "",
@@ -172,27 +198,31 @@ function toYamlString(input: string): string {
 	return `"${input.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-function sanitizePostId(input: string | undefined): string {
+function sanitizePostId(input: string | undefined, kind: Kind): string {
 	if (!input) return "";
 	const normalized = input.trim().replace(/\\/g, "/").replace(/^\/+/, "");
 	if (!normalized.endsWith(".md")) return "";
 	if (normalized.includes("..")) return "";
-	if (normalized.startsWith("src/content/posts/")) {
-		return normalized.slice(POSTS_ROOT.length);
+	const root = getKindRoot(kind);
+	if (normalized.startsWith(root)) {
+		return normalized.slice(root.length);
 	}
 	return normalized;
 }
 
-function sanitizePostIds(input: string[] | string | undefined): string[] {
+function sanitizePostIds(
+	input: string[] | string | undefined,
+	kind: Kind,
+): string[] {
 	if (!input) return [];
 	const rawValues = Array.isArray(input) ? input : input.split(",");
 	return Array.from(
-		new Set(rawValues.map((item) => sanitizePostId(item)).filter(Boolean)),
+		new Set(rawValues.map((item) => sanitizePostId(item, kind)).filter(Boolean)),
 	);
 }
 
-function toRepoPath(postId: string): string {
-	return `${POSTS_ROOT}${postId}`;
+function toRepoPath(postId: string, kind: Kind): string {
+	return `${getKindRoot(kind)}${postId}`;
 }
 
 function decodeGithubBase64(content: string): string {
@@ -296,10 +326,9 @@ function parseFrontmatterBool(frontmatter: string, key: string): boolean {
 	return value === "true";
 }
 
-function toSlugFromRepoPath(path: string): string {
-	let slug = path
-		.replace(new RegExp(`^${POSTS_ROOT}`), "")
-		.replace(/\.md$/i, "");
+function toSlugFromRepoPath(path: string, kind: Kind): string {
+	const root = getKindRoot(kind);
+	let slug = path.replace(new RegExp(`^${root}`), "").replace(/\.md$/i, "");
 	if (slug.endsWith("/index")) {
 		slug = slug.slice(0, -"/index".length);
 	}
@@ -460,19 +489,21 @@ async function deleteRepoFile(params: {
 function extractTrashedPost(
 	path: string,
 	markdown: string,
+	kind: Kind,
 ): TrashedPost | null {
 	const parsed = splitFrontmatter(markdown);
 	if (!parsed) return null;
 	if (!parseFrontmatterBool(parsed.frontmatter, "trashed")) return null;
 
-	const slug = toSlugFromRepoPath(path);
+	const root = getKindRoot(kind);
+	const slug = toSlugFromRepoPath(path, kind);
 	const titleRaw = parseFrontmatterValue(parsed.frontmatter, "title");
 	const title = unquoteYamlValue(titleRaw) || slug || "未命名文章";
 	const publishedRaw = parseFrontmatterValue(parsed.frontmatter, "published");
 	const trashedAtRaw = parseFrontmatterValue(parsed.frontmatter, "trashedAt");
 
 	return {
-		id: path.replace(new RegExp(`^${POSTS_ROOT}`), ""),
+		id: path.replace(new RegExp(`^${root}`), ""),
 		slug,
 		title,
 		published: unquoteYamlValue(publishedRaw),
@@ -484,16 +515,18 @@ async function listTrashedPosts(params: {
 	githubBase: string;
 	branch: string;
 	headers: Record<string, string>;
+	kind: Kind;
 }): Promise<TrashedPost[]> {
+	const root = getKindRoot(params.kind);
 	if (import.meta.env.DEV) {
-		const localPostPaths = await listLocalPostPaths();
+		const localPostPaths = await listLocalPostPaths(root);
 		const parsedPosts = await mapWithConcurrency(
 			localPostPaths,
 			TRASH_LIST_READ_CONCURRENCY,
 			async (path) => {
 				const file = await readLocalRepoFile(path);
 				if (!file) return null;
-				return extractTrashedPost(path, file);
+				return extractTrashedPost(path, file, params.kind);
 			},
 		);
 		return sortTrashedPosts(
@@ -532,7 +565,7 @@ async function listTrashedPosts(params: {
 		const postPaths = (treePayload.tree || [])
 			.filter((item) => item.type === "blob" && typeof item.path === "string")
 			.map((item) => item.path || "")
-			.filter((path) => path.startsWith(POSTS_ROOT) && path.endsWith(".md"));
+			.filter((path) => path.startsWith(root) && path.endsWith(".md"));
 
 		const parsedPosts = await mapWithConcurrency(
 			postPaths,
@@ -545,7 +578,7 @@ async function listTrashedPosts(params: {
 					headers: params.headers,
 				});
 				if (!file) return null;
-				return extractTrashedPost(path, file.content);
+				return extractTrashedPost(path, file.content, params.kind);
 			},
 		);
 
@@ -587,11 +620,13 @@ async function deleteSinglePost(params: {
 	branch: string;
 	headers: Record<string, string>;
 	postId: string;
+	kind: Kind;
 }): Promise<{
 	path: string;
 	commitUrl: string;
 }> {
-	const path = toRepoPath(params.postId);
+	const kindLabel = getKindCommitLabel(params.kind);
+	const path = toRepoPath(params.postId, params.kind);
 	const existingFile = await readRepoFile({
 		githubBase: params.githubBase,
 		path,
@@ -611,7 +646,7 @@ async function deleteSinglePost(params: {
 				commitUrl: "",
 			};
 		}
-		throw new Error(`文章文件不存在: ${params.postId}`);
+		throw new Error(`文件不存在: ${params.postId}`);
 	}
 
 	const commitUrl = await deleteRepoFile({
@@ -620,7 +655,7 @@ async function deleteSinglePost(params: {
 		branch: params.branch,
 		headers: params.headers,
 		sha: existingFile.sha,
-		commitMessage: `chore(post): delete ${params.postId}`,
+		commitMessage: `chore(${kindLabel}): delete ${params.postId}`,
 	});
 	await deleteLocalRepoFile(path);
 	clearCachedTrashedPosts({
@@ -640,12 +675,14 @@ async function updateSinglePostTrashState(params: {
 	headers: Record<string, string>;
 	postId: string;
 	shouldTrash: boolean;
+	kind: Kind;
 }): Promise<{
 	path: string;
 	commitUrl: string;
 	skipped: boolean;
 }> {
-	const path = toRepoPath(params.postId);
+	const kindLabel = getKindCommitLabel(params.kind);
+	const path = toRepoPath(params.postId, params.kind);
 	const existingFile = await readRepoFile({
 		githubBase: params.githubBase,
 		path,
@@ -676,7 +713,7 @@ async function updateSinglePostTrashState(params: {
 		}
 	}
 	if (!existingFile) {
-		throw new Error(`文章文件不存在: ${params.postId}`);
+		throw new Error(`文件不存在: ${params.postId}`);
 	}
 
 	const nextMarkdown = applyTrashFlag(existingFile.content, params.shouldTrash);
@@ -695,7 +732,7 @@ async function updateSinglePostTrashState(params: {
 		headers: params.headers,
 		sha: existingFile.sha,
 		content: nextMarkdown,
-		commitMessage: `chore(post): ${params.shouldTrash ? "trash" : "restore"} ${params.postId}`,
+		commitMessage: `chore(${kindLabel}): ${params.shouldTrash ? "trash" : "restore"} ${params.postId}`,
 	});
 	await writeLocalRepoFile(path, nextMarkdown);
 	clearCachedTrashedPosts({
@@ -750,6 +787,9 @@ export const POST: APIRoute = async ({ request }) => {
 		return json(400, { ok: false, message: "不支持的动作" });
 	}
 
+	// kind: post = 文章（默认），thought = 随笔
+	const kind = normalizeKind(body.kind);
+
 	const githubBase = `https://api.github.com/repos/${githubOwner}/${githubRepo}`;
 	const commonHeaders = {
 		Accept: "application/vnd.github+json",
@@ -763,15 +803,16 @@ export const POST: APIRoute = async ({ request }) => {
 				githubBase,
 				branch: githubBranch,
 				headers: commonHeaders,
+				kind,
 			});
-			return json(200, { ok: true, posts });
+			return json(200, { ok: true, kind, posts });
 		}
 
 		const normalizedPostIds = Array.from(
 			new Set([
-				...sanitizePostIds(body.postIds),
+				...sanitizePostIds(body.postIds, kind),
 				...(() => {
-					const singlePostId = sanitizePostId(body.postId);
+					const singlePostId = sanitizePostId(body.postId, kind);
 					return singlePostId ? [singlePostId] : [];
 				})(),
 			]),
@@ -793,6 +834,7 @@ export const POST: APIRoute = async ({ request }) => {
 						branch: githubBranch,
 						headers: commonHeaders,
 						postId: currentPostId,
+						kind,
 					});
 					deletedPaths.push(result.path);
 					if (result.commitUrl) {
@@ -807,6 +849,7 @@ export const POST: APIRoute = async ({ request }) => {
 					headers: commonHeaders,
 					postId: currentPostId,
 					shouldTrash: true,
+					kind,
 				});
 				deletedPaths.push(result.path);
 				if (result.commitUrl) {
@@ -829,7 +872,7 @@ export const POST: APIRoute = async ({ request }) => {
 			return json(400, { ok: false, message: "postId 无效" });
 		}
 
-		const path = toRepoPath(postId);
+		const path = toRepoPath(postId, kind);
 		const existingFile = await readRepoFile({
 			githubBase,
 			path,
@@ -837,7 +880,7 @@ export const POST: APIRoute = async ({ request }) => {
 			headers: commonHeaders,
 		});
 		if (!existingFile && !import.meta.env.DEV) {
-			return json(404, { ok: false, message: "文章文件不存在" });
+			return json(404, { ok: false, message: "文件不存在" });
 		}
 
 		if (action === "delete") {
@@ -846,6 +889,7 @@ export const POST: APIRoute = async ({ request }) => {
 				branch: githubBranch,
 				headers: commonHeaders,
 				postId,
+				kind,
 			});
 			const deployed = await triggerDeployHook(vercelDeployHook);
 			return json(200, {
@@ -865,6 +909,7 @@ export const POST: APIRoute = async ({ request }) => {
 			headers: commonHeaders,
 			postId,
 			shouldTrash,
+			kind,
 		});
 		if (result.skipped) {
 			return json(200, {

@@ -4,6 +4,7 @@ import { saveDraft } from "@utils/dev-draft-utils";
 import { getDeveloperModeEnabled } from "@utils/setting-utils";
 import { onMount } from "svelte";
 
+export let type: "post" | "thought" = "post";
 export let title = "";
 export let slug = "";
 export let content = "";
@@ -44,6 +45,9 @@ function slugify(input: string): string {
 
 function buildDraftId(): string {
 	const base = slugify(slug || title) || `post-${Date.now()}`;
+	if (type === "thought") {
+		return `published-edit-thought-${base}`;
+	}
 	return `published-edit-${base}`;
 }
 
@@ -59,6 +63,7 @@ function editAndRepublish() {
 	const draftId = buildDraftId();
 	saveDraft({
 		id: draftId,
+		type,
 		title,
 		slug,
 		originalSlug: slug,

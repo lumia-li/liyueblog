@@ -7,14 +7,19 @@ import { getDeveloperModeEnabled } from "@utils/setting-utils";
 import { url } from "@utils/url-utils";
 import { onMount } from "svelte";
 
-type SuccessAction = "reload" | "home" | "none";
+type SuccessAction = "reload" | "home" | "thoughts" | "none";
 
 const DEV_EDITOR_SKIP_TRASH_CONFIRM_KEY = "devEditorSkipTrashConfirm";
 
+export let kind: "post" | "thought" = "post";
 export let title = "";
 export let postId = "";
 export let compact = false;
 export let afterSuccess: SuccessAction = "reload";
+
+function unitLabel(): string {
+	return kind === "thought" ? "随笔" : "文章";
+}
 
 let developerModeEnabled = false;
 let dialogOpen = false;
@@ -91,6 +96,10 @@ function performSuccessAction() {
 		window.location.replace(url("/"));
 		return;
 	}
+	if (afterSuccess === "thoughts") {
+		window.location.replace(url("/thoughts/"));
+		return;
+	}
 	window.location.reload();
 }
 
@@ -99,11 +108,14 @@ async function runSuccessAction() {
 	const targetUrl =
 		afterSuccess === "home"
 			? new URL(url("/"), window.location.origin).toString()
-			: window.location.href;
+			: afterSuccess === "thoughts"
+				? new URL(url("/thoughts/"), window.location.origin).toString()
+				: window.location.href;
 	const waitPromise = waitForPostsToDisappear({
 		pageUrl: targetUrl,
 		postIds: [postId],
 		titles: [title],
+		kind,
 	});
 
 	if (document.visibilityState !== "visible" || !document.hasFocus()) {
@@ -126,6 +138,12 @@ async function movePostToTrash(rememberChoice = false) {
 		} catch (_error) {
 			// Ignore history update failures.
 		}
+	} else if (afterSuccess === "thoughts") {
+		try {
+			window.history.replaceState(window.history.state, "", url("/thoughts/"));
+		} catch (_error) {
+			// Ignore history update failures.
+		}
 	}
 
 	const devCodeHash = readDevCode();
@@ -143,6 +161,7 @@ async function movePostToTrash(rememberChoice = false) {
 			},
 			body: JSON.stringify({
 				action: "move",
+				kind,
 				postId,
 				devCodeHash,
 			}),
@@ -155,7 +174,7 @@ async function movePostToTrash(rememberChoice = false) {
 			throw new Error(payload.message || "移入垃圾桶失败");
 		}
 		window.dispatchEvent(new CustomEvent("trash-posts-updated"));
-		showNotice(`已移入垃圾桶：${title || "文章"}`, "success");
+		showNotice(`已移入垃圾桶：${title || unitLabel()}`, "success");
 		setSkipTrashConfirm(rememberChoice);
 		dialogOpen = false;
 		await runSuccessAction();
@@ -208,7 +227,7 @@ onMount(() => {
 			type="button"
 			class="delete-btn"
 			disabled={isSubmitting}
-			aria-label="删除文章"
+			aria-label={`删除${unitLabel()}`}
 			title="移入垃圾桶"
 			on:click={beginConfirm}
 		>
@@ -224,9 +243,9 @@ onMount(() => {
 
 	<DevConfirmDialog
 		open={dialogOpen}
-		label="删除文章"
-		title={`确认将《${title || "未命名文章"}》删除吗？`}
-		description="文章会先移入垃圾桶，不会立刻彻底删除。"
+		label={`删除${unitLabel()}`}
+		title={`确认将《${title || `未命名${unitLabel()}`}》删除吗？`}
+		description="内容会先移入垃圾桶，不会立刻彻底删除。"
 		note="如果只是普通删除，后续仍可以在垃圾桶中恢复。"
 		confirmLabel="确认删除"
 		cancelLabel="再想想"
