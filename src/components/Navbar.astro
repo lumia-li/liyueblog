@@ -6,6 +6,7 @@ import { LinkPreset, type NavBarLink } from "../types/config";
 import { url } from "../utils/url-utils";
 import LightDarkSwitch from "./LightDarkSwitch.svelte";
 import Search from "./Search.svelte";
+import TranslateSwitch from "./TranslateSwitch.svelte";
 import DisplaySettings from "./widget/DisplaySettings.svelte";
 import NavMenuPanel from "./widget/NavMenuPanel.astro";
 
@@ -77,6 +78,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
                     </button>
             )}
             <LightDarkSwitch client:only="svelte"></LightDarkSwitch>
+            <TranslateSwitch client:only="svelte"></TranslateSwitch>
             <button aria-label="Menu" name="Nav Menu" class="nav-icon-btn w-11 h-11 active:scale-90 md:!hidden" id="nav-menu-switch">
                 <Icon name="material-symbols:menu-rounded" class="text-[1.25rem]"></Icon>
             </button>

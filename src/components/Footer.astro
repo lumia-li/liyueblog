@@ -18,7 +18,8 @@ const currentYear = new Date().getFullYear();
         <a class="transition link font-medium footer-link-astro" target="_blank" href="https://astro.build">Astro</a> &
         <a class="transition link font-medium footer-link-fuwari" target="_blank" href="https://github.com/saicaca/fuwari">Fuwari</a>
         <br>
-        <span class="uptime-line cursor-pointer select-none" title="戳一下，看板娘会汇报运行时间哦">
+        <!-- 运行时长由「数字 + 单位」拼成，单位词单独翻译没有意义，因此不参与翻译 -->
+        <span class="uptime-line cursor-pointer select-none" title="戳一下，看板娘会汇报运行时间哦" data-no-translate>
             <span class="footer-force-black">本站已运行：</span>
             <span class="uptime-days">0</span>天
             <span class="uptime-hours">0</span>小时
