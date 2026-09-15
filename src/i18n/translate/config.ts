@@ -23,9 +23,10 @@ export const SOURCE_LANGUAGE = "auto";
 /**
  * 翻译服务相关逻辑全部在服务端（src/server/translate），密钥与术语表不会下发到浏览器。
  *
- * 翻译通道（providers/index.ts）：只启用了 translatejs —— translate.js 免费通道
- * （translate.service，无需注册、无需密钥）
- * 项目地址 https://github.com/xnx3/translate
+ * 翻译通道（providers/index.ts）已启用两个，访客可在语言面板顶部自行切换：
+ * - translatejs —— translate.js 免费通道（translate.service，无需注册、无需密钥）
+ *   项目地址 https://github.com/xnx3/translate
+ * - edge —— 微软 Edge 翻译接口（edge.microsoft.com，同样无需密钥）
  *
  * 批大小设计依据：translate.service 单次可接受 50 条文本（实测），
  * 但官方有「2 秒内最多 2 次请求」的频率防护，所以服务端做了串行 + 最小间隔 + 重试。

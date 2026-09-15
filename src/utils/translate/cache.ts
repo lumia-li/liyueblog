@@ -15,13 +15,18 @@ import {
 const CACHE_STORAGE_KEY = "liyue.translate.cache.v1";
 const LANGUAGE_STORAGE_KEY = "liyue.translate.language";
 const LANGUAGE_MANUAL_STORAGE_KEY = "liyue.translate.language.manual";
+const PROVIDER_STORAGE_KEY = "liyue.translate.provider";
 
 const TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 const SAVE_DEBOUNCE_MS = 500;
 
 /** [原文, 译文, 写入时间] */
 type CacheEntry = [string, string, number];
-type CacheStore = { v: 1; entries: Record<string, CacheEntry> };
+/**
+ * v2：缓存键里不含翻译源，默认翻译源从 translatejs 换成 edge 后，
+ * v1 里残留的旧译文会被复用，因此升版本让旧缓存整体失效。
+ */
+type CacheStore = { v: 2; entries: Record<string, CacheEntry> };
 
 let store: CacheStore | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -92,7 +97,7 @@ function pruneExpired(target: CacheStore): void {
 
 function loadStore(): CacheStore {
 	if (store) return store;
-	store = { v: 1, entries: {} };
+	store = { v: 2, entries: {} };
 	if (!canUseStorage()) return store;
 	try {
 		const raw = localStorage.getItem(CACHE_STORAGE_KEY);
@@ -100,7 +105,7 @@ function loadStore(): CacheStore {
 			const parsed = JSON.parse(raw) as CacheStore | null;
 			if (
 				parsed &&
-				parsed.v === 1 &&
+				parsed.v === 2 &&
 				parsed.entries &&
 				typeof parsed.entries === "object"
 			) {
@@ -201,7 +206,7 @@ export function findOriginalByTranslated(
 
 /** 清空本地翻译缓存（不清理语言偏好） */
 export function clearTranslationCache(): void {
-	store = { v: 1, entries: {} };
+	store = { v: 2, entries: {} };
 	reverseIndex.clear();
 	reverseReady = false;
 	if (canUseStorage()) {
@@ -260,6 +265,32 @@ export function setLanguageManuallyChosen(value: boolean): void {
 	if (!canUseStorage()) return;
 	try {
 		localStorage.setItem(LANGUAGE_MANUAL_STORAGE_KEY, value ? "true" : "false");
+	} catch {
+		/* ignore */
+	}
+}
+
+/**
+ * 读取访客选择的翻译源（未选择过则为 null，由服务端决定默认值）。
+ *
+ * 注意：缓存键只包含「目标语言 + 原文」，不含翻译源。
+ * 因此切换翻译源时引擎会先清空缓存再重译（见 utils/translate/engine.ts）。
+ */
+export function getStoredProvider(): string | null {
+	if (!canUseStorage()) return null;
+	try {
+		const value = localStorage.getItem(PROVIDER_STORAGE_KEY);
+		return value && value.trim() ? value.trim() : null;
+	} catch {
+		return null;
+	}
+}
+
+/** 记住访客选择的翻译源 */
+export function setStoredProvider(id: string): void {
+	if (!canUseStorage()) return;
+	try {
+		localStorage.setItem(PROVIDER_STORAGE_KEY, id);
 	} catch {
 		/* ignore */
 	}

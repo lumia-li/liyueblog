@@ -1,8 +1,9 @@
 /**
  * 翻译服务适配器接口。
  *
- * 当前只启用了 translate.js 免费通道（见 providers/translatejs.ts）。
- * 想再接入其它服务：实现该接口并在 providers/index.ts 注册即可，
+ * 已实现：translate.js 免费通道（translatejs）与微软 Edge 接口（edge）。
+ * 想再接入其它服务：实现该接口、在 providers/index.ts 注册，
+ * 并在 i18n/translate/providers.ts 里补一条面板短标签即可；
  * 其余逻辑（术语表保护、批量、限流、错误处理）完全复用。
  */
 export interface ProviderTranslateInput {
@@ -22,7 +23,7 @@ export interface ProviderDescription {
 }
 
 export interface TranslationProvider {
-	/** 适配器唯一 ID，对应 TRANSLATE_PROVIDER */
+	/** 适配器唯一 ID，对应请求体里的 provider / 环境变量 TRANSLATE_PROVIDER */
 	id: string;
 	/** 展示名称 */
 	label: string;

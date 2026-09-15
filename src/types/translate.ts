@@ -3,7 +3,21 @@
  */
 
 /** 已内置实现的翻译服务适配器 ID */
-export type TranslateProviderId = "translatejs";
+export type TranslateProviderId = "translatejs" | "edge";
+
+/** 翻译源（适配器）的运行时信息，由 GET /api/translate 返回 */
+export interface TranslateProviderInfo {
+	/** 适配器 ID，对应请求体里的 provider */
+	id: string;
+	/** 展示名称 */
+	label: string;
+	/** 是否可用（缺少必要配置时为 false） */
+	configured: boolean;
+	/** 运行模式，例如 edge-translate-public */
+	mode: string;
+	/** 运行模式说明 */
+	detail: string;
+}
 
 /** 语言选项 */
 export interface TranslateLanguage {
@@ -33,6 +47,8 @@ export interface TranslateRequestPayload {
 	source?: string;
 	/** 目标语言 */
 	target: string;
+	/** 可选：指定翻译源（翻译适配器 id），留空则使用默认翻译源 */
+	provider?: TranslateProviderId;
 	/** 可选：额外术语表（服务端内置术语表优先级更高） */
 	glossary?: TranslateGlossary;
 	/** 可选：额外忽略词（服务端内置忽略词优先） */
@@ -82,7 +98,7 @@ export interface TranslateStatusDetail {
 	loading: boolean;
 	/** 进度 0~1 */
 	progress: number;
-	/** 正在使用的翻译服务（由服务端返回） */
+	/** 当前使用的翻译源 id（默认翻译源或访客手动选择） */
 	provider: string | null;
 	/** 最近一次错误信息 */
 	error: string | null;
@@ -100,6 +116,8 @@ export interface TranslateServiceInfo {
 	mode: string;
 	/** 运行模式说明 */
 	detail: string;
+	/** 全部已启用的翻译源（供面板切换使用） */
+	providers: TranslateProviderInfo[];
 	supportedLanguages: string[];
 	maxTexts: number;
 	maxTotalChars: number;

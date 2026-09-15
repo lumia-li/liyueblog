@@ -12,13 +12,20 @@ import {
 	resolveLanguageFromNavigator,
 } from "@i18n/translate/languages";
 import {
+	DEFAULT_TRANSLATE_PROVIDER,
+	isTranslateProviderId,
+} from "@i18n/translate/providers";
+import {
+	clearTranslationCache,
 	findOriginalByTranslated,
 	getCachedTranslation,
 	getStoredLanguage,
+	getStoredProvider,
 	isLanguageManuallyChosen,
 	setCachedTranslation,
 	setLanguageManuallyChosen,
 	setStoredLanguage,
+	setStoredProvider,
 } from "@utils/translate/cache";
 import type {
 	TranslateResponsePayload,
@@ -171,6 +178,25 @@ interface Batch {
 
 type StatusListener = (status: TranslateStatusDetail) => void;
 
+/**
+ * 访客切换语言 / 翻译源导致的中断。
+ * 它不是错误：既不展示给访客，也不打断「换配置后立刻重译」的流程。
+ */
+class TranslateCancelledError extends Error {
+	constructor() {
+		super("翻译已取消");
+		this.name = "TranslateCancelledError";
+	}
+}
+
+function isAbortError(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		(error as { name?: unknown }).name === "AbortError"
+	);
+}
+
 function idleYield(): Promise<void> {
 	return new Promise((resolve) => {
 		const requestIdle = (
@@ -194,7 +220,10 @@ export class TranslateEngine {
 	private loading = false;
 	private progress = 0;
 	private error: string | null = null;
+	/** 当前翻译源（展示用），默认翻译源或访客手动选择 */
 	private provider: string | null = null;
+	/** 访客是否手动选过翻译源：没选过时请求里不带 provider，交给服务端默认值 */
+	private providerChosen = false;
 	private stats: TranslateStats = {
 		translated: 0,
 		cached: 0,
@@ -202,6 +231,11 @@ export class TranslateEngine {
 		unchanged: 0,
 	};
 
+	/**
+	 * 当前这一轮翻译的中断句柄。
+	 * 访客切换语言 / 翻译源时立刻 abort，正在飞行的请求不会再等结果。
+	 */
+	private requestController: AbortController | null = null;
 	private observer: MutationObserver | null = null;
 	private rescanTimer: ReturnType<typeof setTimeout> | null = null;
 	private running = false;
@@ -216,6 +250,14 @@ export class TranslateEngine {
 		const stored = getStoredLanguage();
 		const normalizedStored = stored ? normalizeLanguageCode(stored) : "";
 		this.language = normalizedStored || this.defaultLanguage;
+
+		const storedProvider = getStoredProvider();
+		if (storedProvider && isTranslateProviderId(storedProvider)) {
+			this.provider = storedProvider;
+			this.providerChosen = true;
+		} else {
+			this.provider = DEFAULT_TRANSLATE_PROVIDER;
+		}
 	}
 
 	// ---------------------------------------------------------------- 状态订阅
@@ -320,6 +362,7 @@ export class TranslateEngine {
 	}
 
 	destroy(): void {
+		this.cancelInFlight();
 		if (this.rescanTimer) {
 			clearTimeout(this.rescanTimer);
 			this.rescanTimer = null;
@@ -327,6 +370,17 @@ export class TranslateEngine {
 		this.observer?.disconnect();
 		this.observer = null;
 		this.initialized = false;
+	}
+
+	/**
+	 * 立刻中断正在飞行的翻译请求。
+	 * 只由「访客主动切换语言 / 翻译源」和 destroy 调用；
+	 * 动态内容触发的补翻不打断，而是等当前这轮结束后补齐。
+	 */
+	private cancelInFlight(): void {
+		const controller = this.requestController;
+		this.requestController = null;
+		controller?.abort();
 	}
 
 	// ---------------------------------------------------------------- 语言切换
@@ -371,6 +425,8 @@ export class TranslateEngine {
 		this.progress = 0;
 		this.pendingRescan = false;
 		this.applyDocumentLanguage(target);
+		// 语言变了，旧语言的请求再等下去也没意义，直接掐断
+		this.cancelInFlight();
 
 		if (target === this.defaultLanguage) {
 			this.runToken += 1; // 取消进行中的翻译
@@ -384,6 +440,49 @@ export class TranslateEngine {
 			return;
 		}
 
+		void this.translateCurrent();
+	}
+
+	/**
+	 * 切换翻译源（翻译适配器）。
+	 *
+	 * 不同翻译源的译文不同，所以会先清空本地缓存、把页面恢复成原文，
+	 * 再按新的翻译源整页重译。
+	 */
+	setProvider(id: string): void {
+		if (!isTranslateProviderId(id)) {
+			this.emitStatus();
+			return;
+		}
+
+		const changed = id !== this.provider;
+		this.provider = id;
+		this.providerChosen = true;
+		setStoredProvider(id);
+
+		if (!changed) {
+			this.emitStatus();
+			return;
+		}
+
+		clearTranslationCache();
+		this.error = null;
+		this.stats = { translated: 0, cached: 0, skipped: 0, unchanged: 0 };
+		this.progress = 0;
+		this.runToken += 1; // 旧这一轮的 token 立即作废
+		this.pendingRescan = false;
+		// 旧翻译源的结果已经没用了，立刻掐断它的请求
+		this.cancelInFlight();
+
+		if (this.language === this.defaultLanguage) {
+			this.emitStatus();
+			return;
+		}
+
+		// 清掉「已应用」标记：collectGroups 会重新收集这些节点，
+		// 页面先留着旧译文，等新翻译源的结果回来再整体替换，避免闪回原文
+		this.clearAppliedMarks();
+		this.emitStatus();
 		void this.translateCurrent();
 	}
 
@@ -421,11 +520,28 @@ export class TranslateEngine {
 		return restored;
 	}
 
+	/**
+	 * 只清掉「该节点已翻成某语言」的标记，不动 DOM 文本。
+	 * 切换翻译源时用：旧译文继续显示，避免页面先闪回原文再变译文。
+	 */
+	private clearAppliedMarks(): void {
+		if (typeof document === "undefined" || !document.body) return;
+		resetSkipCache();
+		const walker = this.createWalker(document.body);
+		let current = walker.nextNode();
+		while (current) {
+			appliedLanguages.delete(current as Text);
+			current = walker.nextNode();
+		}
+	}
+
 	// ---------------------------------------------------------------- 翻译主流程
 
 	async translateCurrent(): Promise<void> {
 		if (typeof document === "undefined" || !document.body) return;
 		if (this.running) {
+			// 动态内容触发的补翻不打断当前这轮，等它跑完再增量补齐；
+			// 访客主动切换语言 / 翻译源时已先 cancelInFlight()，这里负责排队重译。
 			this.pendingRescan = true;
 			return;
 		}
@@ -437,8 +553,21 @@ export class TranslateEngine {
 				this.pendingRescan = false;
 				const target = this.language;
 				if (target === this.defaultLanguage) break;
+
+				const controller = new AbortController();
+				this.requestController = controller;
 				this.setLoading(true, 0);
-				await this.performTranslation(target, ++this.runToken);
+				try {
+					await this.performTranslation(target, ++this.runToken, controller.signal);
+				} catch (error) {
+					// 被访客中断（切换语言 / 翻译源）：不当错误，
+					// 交给 while 条件判断是否立刻用新配置重译
+					if (!(error instanceof TranslateCancelledError)) throw error;
+				} finally {
+					if (this.requestController === controller) {
+						this.requestController = null;
+					}
+				}
 			} while (
 				this.pendingRescan &&
 				this.language !== this.defaultLanguage &&
@@ -449,11 +578,16 @@ export class TranslateEngine {
 				error instanceof Error ? error.message : "翻译失败，请稍后重试";
 		} finally {
 			this.running = false;
+			this.requestController = null;
 			this.setLoading(false, 0);
 		}
 	}
 
-	private async performTranslation(target: string, token: number): Promise<void> {
+	private async performTranslation(
+		target: string,
+		token: number,
+		signal: AbortSignal,
+	): Promise<void> {
 		// 每次全量扫描前清空跳过判定缓存，避免动态属性变化后判定过期
 		const groups = this.collectGroups(target);
 		if (groups.length === 0) return;
@@ -479,6 +613,7 @@ export class TranslateEngine {
 				const translations = await this.requestTranslation(
 					needRemote.map((group) => group.original),
 					target,
+					signal,
 				);
 				if (this.language !== target || token !== this.runToken) return;
 				for (let i = 0; i < needRemote.length; i += 1) {
@@ -507,9 +642,22 @@ export class TranslateEngine {
 	private async requestTranslation(
 		texts: string[],
 		target: string,
+		signal: AbortSignal,
 	): Promise<string[]> {
+		// controller 负责超时，signal 是引擎级的「切换语言 / 翻译源」中断
 		const controller = new AbortController();
-		const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+		let timedOut = false;
+		const timer = setTimeout(() => {
+			timedOut = true;
+			controller.abort();
+		}, REQUEST_TIMEOUT_MS);
+		const abortFromOutside = () => controller.abort();
+		if (signal.aborted) {
+			controller.abort();
+		} else {
+			signal.addEventListener("abort", abortFromOutside, { once: true });
+		}
+
 		try {
 			const response = await fetch("/api/translate", {
 				method: "POST",
@@ -521,6 +669,9 @@ export class TranslateEngine {
 					texts,
 					source: SOURCE_LANGUAGE,
 					target,
+					// 未手动选择过翻译源时不带 provider，使用服务端默认
+					provider:
+						this.providerChosen && this.provider ? this.provider : undefined,
 				}),
 				cache: "no-store",
 				signal: controller.signal,
@@ -553,12 +704,15 @@ export class TranslateEngine {
 
 			return payload.translations;
 		} catch (error) {
-			if (error instanceof Error && error.name === "AbortError") {
-				throw new Error("翻译请求超时");
+			if (isAbortError(error)) {
+				if (timedOut) throw new Error("翻译请求超时");
+				// 被访客切换语言 / 翻译源掐断，交给上层静默处理
+				throw new TranslateCancelledError();
 			}
 			throw error;
 		} finally {
 			clearTimeout(timer);
+			signal.removeEventListener("abort", abortFromOutside);
 		}
 	}
 

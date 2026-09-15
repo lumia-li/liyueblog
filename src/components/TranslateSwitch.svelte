@@ -5,6 +5,11 @@ import {
 	buildSwitchOptions,
 	getDefaultLanguage,
 } from "@i18n/translate/languages";
+import {
+	type TranslateProviderOption,
+	TRANSLATE_PROVIDER_OPTIONS,
+	getTranslateProviderOption,
+} from "@i18n/translate/providers";
 import { clearTranslationCache, getCacheStats } from "@utils/translate/cache";
 import { getTranslateEngine } from "@utils/translate/engine";
 import { onMount } from "svelte";
@@ -31,7 +36,17 @@ let optionEls: HTMLButtonElement[] = [];
 let focusIndex = 0;
 let cacheEntries = 0;
 let feedback = "";
+/** 服务端实际启用的翻译源 id；取不到时回退到内置列表 */
+let enabledProviderIds: string[] | null = null;
+let providersLoaded = false;
 
+$: providers = enabledProviderIds
+	? TRANSLATE_PROVIDER_OPTIONS.filter((option) =>
+			enabledProviderIds?.includes(option.id),
+		)
+	: TRANSLATE_PROVIDER_OPTIONS;
+$: activeProvider =
+	getTranslateProviderOption(status.provider ?? "") ?? providers[0] ?? null;
 $: currentOption =
 	options.find((option) => option.code === status.language) ?? options[0];
 $: progressPercent = Math.round(status.progress * 100);
@@ -73,6 +88,32 @@ function showPanel() {
 	open = true;
 	feedback = "";
 	refreshCacheInfo();
+	void loadProviders();
+}
+
+/** 从服务端取一次「实际启用的翻译源」，只请求一次，失败就沿用内置列表 */
+async function loadProviders() {
+	if (providersLoaded) return;
+	providersLoaded = true;
+	try {
+		const response = await fetch("/api/translate", {
+			headers: { Accept: "application/json" },
+			cache: "no-store",
+		});
+		const payload = (await response.json().catch(() => null)) as {
+			ok?: boolean;
+			providers?: Array<{ id?: unknown; configured?: unknown }>;
+		} | null;
+		if (!response.ok || payload?.ok !== true || !Array.isArray(payload.providers)) {
+			return;
+		}
+		const ids = payload.providers
+			.filter((item) => item?.configured !== false && typeof item?.id === "string")
+			.map((item) => item.id as string);
+		if (ids.length > 0) enabledProviderIds = ids;
+	} catch {
+		/* 取不到时保留内置列表 */
+	}
 }
 
 function hidePanel(returnFocus = false) {
@@ -93,6 +134,13 @@ function selectLanguage(option: TranslateSwitchOption) {
 	feedback = option.isOriginal ? "已恢复原文" : `已切换到 ${option.label}`;
 	engine.setLanguage(option.code, { manual: true });
 	hidePanel(true);
+}
+
+function selectProvider(option: TranslateProviderOption) {
+	if (option.id === status.provider) return;
+	getTranslateEngine().setProvider(option.id);
+	feedback = `翻译源已切换为 ${option.label}`;
+	refreshCacheInfo();
 }
 
 function handleResetCache() {
@@ -249,10 +297,36 @@ onMount(() => {
 	>
 		<div
 			id="translate-switch-panel"
-			class="card-base float-panel w-64 max-w-[calc(100vw-1.5rem)] max-h-[min(72vh,28rem)] overflow-y-auto p-2 backdrop-blur-md"
+			class="card-base float-panel w-64 max-w-[calc(100vw-1.5rem)] p-2 backdrop-blur-md"
 			role="menu"
 			aria-label="选择语言"
 		>
+			<!-- 翻译源：决定用哪个翻译服务来翻译页面 -->
+			<div class="mb-1 px-2 text-[0.68rem] font-bold text-black/45 dark:text-white/45">
+				翻译源 / Engine
+			</div>
+
+			<div
+				class="mb-2 flex gap-1 rounded-lg bg-black/5 p-0.5 dark:bg-white/10"
+				role="group"
+				aria-label="选择翻译源"
+			>
+				{#each providers as provider (provider.id)}
+					<button
+						type="button"
+						role="menuitemradio"
+						aria-checked={status.provider === provider.id}
+						tabindex={open ? 0 : -1}
+						title={provider.hint}
+						class="btn-plain scale-animation flex h-7 flex-1 items-center justify-center rounded-md px-2 text-[0.68rem] font-medium whitespace-nowrap"
+						class:current-theme-btn={status.provider === provider.id}
+						on:click={() => selectProvider(provider)}
+					>
+						{provider.label}
+					</button>
+				{/each}
+			</div>
+
 			<div class="mb-1 px-2 text-[0.68rem] font-bold text-black/45 dark:text-white/45">
 				原文 / Original
 			</div>
@@ -317,9 +391,12 @@ onMount(() => {
 				</button>
 			</div>
 
-			{#if status.provider}
-				<div class="mt-1 px-2 text-[0.6rem] text-black/35 dark:text-white/35">
-					翻译服务：{status.provider}{ENABLE_AUTO_DETECT ? " · 已开启浏览器语言自动识别" : ""}
+			{#if activeProvider}
+				<div
+					class="mt-1 px-2 text-[0.6rem] text-black/35 dark:text-white/35"
+					title={activeProvider.hint}
+				>
+					翻译源：{activeProvider.label}{ENABLE_AUTO_DETECT ? " · 已开启浏览器语言自动识别" : ""}
 				</div>
 			{/if}
 		</div>
@@ -343,6 +420,20 @@ onMount(() => {
 </div>
 
 <style>
+	/*
+	 * 面板的高度上限与滚动必须写在 id 选择器上：
+	 * src/styles/twikoo.css 里有一条不带 @layer 的全局 `.card-base { overflow: visible }`，
+	 * 它的优先级高于 Tailwind 的 overflow-y-auto / 组件层的 overflow-hidden，
+	 * 会让超出 max-height 的内容直接溢出面板，看起来就像「背景没盖住」。
+	 * 用 id（优先级更高）来声明，同时把上限放到视口内，正常情况下完整显示、无需滚动。
+	 */
+	#translate-switch-panel {
+		max-height: min(calc(100vh - 8rem), 42rem);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+	}
+
 	.translate-progress {
 		position: fixed;
 		top: 0;

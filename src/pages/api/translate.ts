@@ -5,7 +5,11 @@ import {
 	translateTexts,
 } from "@/server/translate/engine";
 import { getTermStats } from "@/server/translate/glossary";
-import { describeProvider } from "@/server/translate/providers";
+import {
+	PROVIDER_IDS,
+	describeProvider,
+	listProviders,
+} from "@/server/translate/providers";
 import type {
 	TranslateErrorPayload,
 	TranslateServiceInfo,
@@ -90,6 +94,15 @@ export const POST: APIRoute = async ({ request }) => {
 		return errorResponse(normalized.status, normalized.message, "INVALID_REQUEST");
 	}
 
+	// 只接受已启用的翻译源，避免把请求代理到任意地址
+	if (normalized.value.provider && !PROVIDER_IDS.includes(normalized.value.provider)) {
+		return errorResponse(
+			400,
+			`不支持的翻译源：${normalized.value.provider}`,
+			"UNKNOWN_PROVIDER",
+		);
+	}
+
 	try {
 		const result = await translateTexts(normalized.value);
 		const payload: TranslateSuccessPayload = {
@@ -119,6 +132,7 @@ export const GET: APIRoute = async () => {
 		configured: provider.configured,
 		mode: provider.mode,
 		detail: provider.detail,
+		providers: listProviders(),
 		supportedLanguages: SUPPORTED_LANGUAGE_CODES,
 		maxTexts: TRANSLATE_LIMITS.maxTexts,
 		maxTotalChars: TRANSLATE_LIMITS.maxTotalChars,

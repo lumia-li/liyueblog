@@ -32,6 +32,8 @@ export interface NormalizedTranslateRequest {
 	texts: string[];
 	source: string;
 	target: string;
+	/** 翻译源（适配器 id），空字符串表示使用默认翻译源 */
+	provider: string;
 	glossary: TranslateGlossary;
 	ignoreWords: string[];
 }
@@ -143,12 +145,19 @@ export function normalizeTranslateRequest(input: unknown): NormalizeResult {
 		source = normalized;
 	}
 
+	// provider 只做格式收敛，是否受支持交给路由层 / resolveProvider 判断
+	let provider = "";
+	if (typeof body.provider === "string" && body.provider.trim()) {
+		provider = body.provider.trim().toLowerCase().slice(0, 40);
+	}
+
 	return {
 		ok: true,
 		value: {
 			texts,
 			source,
 			target,
+			provider,
 			glossary: sanitizeGlossary(body.glossary),
 			ignoreWords: sanitizeIgnoreWords(body.ignoreWords),
 		},
@@ -169,7 +178,7 @@ export interface ServerTranslateResult {
 export async function translateTexts(
 	request: NormalizedTranslateRequest,
 ): Promise<ServerTranslateResult> {
-	const provider = resolveProvider();
+	const provider = resolveProvider(request.provider);
 	const terms: GlossaryTerm[] = buildTerms({
 		glossary: request.glossary,
 		ignoreWords: request.ignoreWords,
