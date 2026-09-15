@@ -9,12 +9,14 @@
 		访问统计
 	</div>
 
-	<!-- 句子中间夹着动态数字，拆成片段翻译会失去语义，因此整句不翻译 -->
-	<p class="text-sm text-50" data-no-translate>
-		您是本站的第
-		<span id="busuanzi_site_uv_friend" class="text-75 font-semibold">加载中...</span>
-		个小伙伴
-	</p>
+	<!--
+		整句必须渲染成【单个文本节点】才能正确翻译：
+		翻译引擎按文本节点逐个翻译，中间夹 <span> 会被拆成
+		「您是本站的第」+「个小伙伴」两段，译文会失去语义。
+		初始占位符不含文字字符，避免引擎在真实数字到位前就把父节点标记成「已翻译」，
+		导致后面写入的整句被跳过；数字到位后由脚本整体替换这句文本。
+	-->
+	<p id="busuanzi_friend_sentence" class="text-sm text-50">--</p>
 
 	<div class="mt-3 rounded-xl border border-dashed border-[var(--line-divider)] px-3 py-2">
 		<div class="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5 text-sm">
@@ -58,7 +60,6 @@
 
 		const setFallbackValues = () => {
 			[
-				"busuanzi_site_uv_friend",
 				"busuanzi_site_pv",
 				"busuanzi_today_pv",
 				"busuanzi_today_uv",
@@ -68,14 +69,21 @@
 			].forEach((id) => setTextSafely(id, "--"));
 		};
 
+		// 整句写入同一个文本节点，保证翻译引擎能拿到完整句子
 		const syncFriendCounter = () => {
 			const siteUv = document.getElementById("busuanzi_site_uv");
-			const friendUv = document.getElementById("busuanzi_site_uv_friend");
-			if (!siteUv || !friendUv) return;
+			const sentence = document.getElementById("busuanzi_friend_sentence");
+			if (!siteUv || !sentence) return;
 			const value = siteUv.textContent?.trim();
-			if (value && value !== "加载中...") {
-				friendUv.textContent = value;
-			}
+			if (!value || value === "加载中...") return;
+			// 同一个值只写一次：重复写入会覆盖掉引擎写回的译文
+			if (sentence.dataset.value === value) return;
+			sentence.dataset.value = value;
+			// 引擎会给「已翻译过」的元素打上 data-i18n-applied 标记，
+			// 带着这个标记写入的新句子会被当成已翻译而跳过，因此重写前先清掉它，
+			// 让引擎把新写进去的整句当作新内容重新翻译。
+			sentence.removeAttribute("data-i18n-applied");
+			sentence.textContent = `您是本站的第 ${value} 个小伙伴`;
 		};
 
 		const bindFriendObserver = () => {
