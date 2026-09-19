@@ -1,0 +1,306 @@
+---
+import FriendLinkApplyModal from "@components/FriendLinkApplyModal.svelte";
+import FriendLinkApplyStatus from "@components/FriendLinkApplyStatus.svelte";
+import FriendLinkCard from "@components/FriendLinkCard.astro";
+import FriendLinkSelfCard from "@components/FriendLinkSelfCard.astro";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { listFriendDir } from "@utils/friend-data";
+import { url } from "@utils/url-utils";
+import { Icon } from "astro-icon/components";
+import { friendLinkConfig } from "../data/friend-links";
+
+const { title, description, intro, self, apply, friends } = friendLinkConfig;
+const showApply = Boolean(apply?.enable);
+
+// 已通过的友链 = 本地配置 + 数据仓库 data/friends/*.json（审核通过只需把文件移过去）
+// 拉取失败时静默退回本地列表，绝不影响构建
+let remoteFriends: { name: string; avatar: string; description: string; url: string }[] = [];
+try {
+	const entries = await listFriendDir("friends");
+	remoteFriends = entries.map((entry) => ({
+		name: entry.name,
+		avatar: entry.avatar || "",
+		description: entry.description || "",
+		url: entry.url,
+	}));
+} catch (error) {
+	console.error("[friends] 读取数据仓库失败，仅使用本地友链列表", error);
+}
+
+const normalizeUrl = (value: string) => value.trim().replace(/\/+$/, "").toLowerCase();
+const localUrls = new Set(friends.map((friend) => normalizeUrl(friend.url)));
+const allFriends = [
+	...friends,
+	...remoteFriends.filter((friend) => !localUrls.has(normalizeUrl(friend.url))),
+];
+---
+
+<MainGridLayout title={title} description={description}>
+	<div class="flex items-center gap-3 mb-4 onload-animation">
+		<div class="w-1 h-6 md:h-7 rounded-md bg-[var(--primary)]"></div>
+		<h1 class="text-2xl md:text-3xl font-bold text-white/90 dark:text-black/90">{title}</h1>
+	</div>
+
+	<div class="flex flex-col gap-4 mb-4">
+		{
+			intro && (
+				<p class="text-75 px-1 onload-animation" style="animation-delay: calc(var(--content-delay) + 30ms);">
+					{intro}
+				</p>
+			)
+		}
+
+		<!-- 申请状态条：只有在本机提交过申请、或已通过审核时才会显示 -->
+		<FriendLinkApplyStatus
+			client:only="svelte"
+			friends={allFriends}
+			endpoint={url("/api/friend-apply-status")}
+		/>
+
+		<FriendLinkSelfCard
+			self={self}
+			class="onload-animation"
+			style="animation-delay: calc(var(--content-delay) + 80ms);"
+		/>
+
+		<div
+			class="card-base p-5 md:p-6 onload-animation"
+			style="animation-delay: calc(var(--content-delay) + 130ms);"
+		>
+			<div class="flex items-center justify-between gap-3 mb-4">
+				<div class="flex items-center gap-2">
+					<Icon name="fa6-solid:users" class="text-[var(--primary)]"></Icon>
+					<h2 class="text-lg font-bold text-90">友链列表</h2>
+				</div>
+				<span class="text-50 text-sm shrink-0">{allFriends.length} 位伙伴</span>
+			</div>
+
+			{
+				allFriends.length > 0 ? (
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+						{allFriends.map((friend, index) => (
+							<FriendLinkCard
+								{...friend}
+								class="onload-animation"
+								style={`animation-delay: calc(var(--content-delay) + ${160 + index * 40}ms);`}
+							/>
+						))}
+					</div>
+				) : (
+					<div class="flex flex-col items-center justify-center gap-2 py-10 text-center text-50">
+						<Icon name="fa6-solid:handshake" class="text-[2rem]"></Icon>
+						<p class="text-sm">还没有伙伴入驻，欢迎来抢沙发~</p>
+					</div>
+				)
+			}
+		</div>
+
+		{
+			showApply && apply && (
+				<div
+					class="card-base p-5 md:p-6 onload-animation"
+					style="animation-delay: calc(var(--content-delay) + 180ms);"
+				>
+					<div class="flex items-center gap-2 mb-4">
+						<Icon name="fa6-solid:circle-info" class="text-[var(--primary)]"></Icon>
+						<h2 class="text-lg font-bold text-90">申请友链</h2>
+					</div>
+
+					{apply.comment && <p class="text-75 text-sm mb-3">{apply.comment}</p>}
+
+					{apply.requirements && apply.requirements.length > 0 && (
+						<ul class="flex flex-col gap-2 mb-4">
+							{apply.requirements.map((item) => (
+								<li class="flex items-start gap-2 text-75 text-sm">
+									<Icon name="fa6-solid:circle-check" class="text-[var(--primary)] mt-1 shrink-0 text-xs" />
+									<span>{item}</span>
+								</li>
+							))}
+						</ul>
+					)}
+
+					{/* 申请入口排成一行：申请表单在左，其它联系方式紧跟其右 */}
+					<div class="flex flex-wrap items-center gap-3">
+						{apply.form?.enable && (
+							<div>
+								<FriendLinkApplyModal
+									client:only="svelte"
+									buttonLabel={apply.form.buttonLabel ?? "填写申请表单"}
+									title={apply.form.title ?? "申请友链"}
+									description={apply.form.description ?? ""}
+									endpoint={url("/api/friend-apply")}
+								/>
+							</div>
+						)}
+
+						{apply.contacts?.map((contact) => (
+							<a
+								href={contact.url}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="btn-regular rounded-lg h-10 px-4 gap-2 text-sm font-bold active:scale-95"
+							>
+								<Icon name={contact.icon} class="text-[1.125rem]"></Icon>
+								<span>{contact.name}</span>
+							</a>
+						))}
+					</div>
+				</div>
+			)
+		}
+	</div>
+</MainGridLayout>
+
+<script is:inline>
+	(() => {
+		// 页面级事件委托只绑定一次（swup 切页后会重新执行本脚本）
+		if (window.__friendLinkPageBound) return;
+		window.__friendLinkPageBound = true;
+
+		// 1) 头像加载失败 -> 隐藏裂图，露出占位图标
+		const markBrokenAvatars = () => {
+			document.querySelectorAll("img.friend-avatar-img").forEach((img) => {
+				if (img.complete && img.naturalWidth === 0) {
+					img.classList.add("friend-avatar-failed");
+				}
+			});
+		};
+
+		document.addEventListener(
+			"error",
+			(event) => {
+				const target = event.target;
+				if (
+					target instanceof HTMLImageElement &&
+					target.classList.contains("friend-avatar-img")
+				) {
+					target.classList.add("friend-avatar-failed");
+				}
+			},
+			true,
+		);
+
+		// 2) 复制名片信息
+		const copyText = async (text) => {
+			if (!text) return false;
+			try {
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					await navigator.clipboard.writeText(text);
+					return true;
+				}
+			} catch (_error) {
+				// 降级到 execCommand
+			}
+			try {
+				const textarea = document.createElement("textarea");
+				textarea.value = text;
+				textarea.setAttribute("readonly", "");
+				textarea.style.position = "fixed";
+				textarea.style.top = "-9999px";
+				document.body.appendChild(textarea);
+				textarea.select();
+				const ok = document.execCommand("copy");
+				textarea.remove();
+				return ok;
+			} catch (_error) {
+				return false;
+			}
+		};
+
+		document.addEventListener("click", async (event) => {
+			const target = event.target;
+			const button = target instanceof Element ? target.closest("[data-friend-copy]") : null;
+			if (!button) return;
+			event.preventDefault();
+			const ok = await copyText(button.getAttribute("data-friend-copy") || "");
+			if (!ok) return;
+			button.classList.add("is-copied");
+			clearTimeout(button.__friendCopyTimer);
+			button.__friendCopyTimer = setTimeout(() => {
+				button.classList.remove("is-copied");
+			}, 1600);
+		});
+
+		// 3) 折叠 / 展开名片里的详细信息
+		document.addEventListener("click", (event) => {
+			const target = event.target;
+			const toggle = target instanceof Element ? target.closest("[data-friend-info-toggle]") : null;
+			if (!toggle) return;
+			event.preventDefault();
+
+			const root = toggle.closest("[data-friend-info-root]");
+			const panel = root ? root.querySelector("[data-friend-info-panel]") : null;
+			if (!panel) return;
+
+			const collapsed = panel.classList.toggle("is-collapsed");
+			toggle.classList.toggle("is-collapsed", collapsed);
+			toggle.setAttribute("aria-expanded", String(!collapsed));
+			toggle.setAttribute("title", collapsed ? "展开详细信息" : "收起详细信息");
+		});
+
+		// 4) 打开友链页时，让看板娘说一句友链相关的话
+		const friendLinkWaifuMessages = [
+			"欢迎来到友链小屋，这里都是我的好朋友哦～",
+			"想和我做朋友吗？填个申请表单就可以啦！",
+			"这些小伙伴的博客都很有意思，去逛逛吧～",
+			"记得常来串门呀，我等着你的申请哦。"
+		];
+
+		const isFriendLinkPage = () => /\/friends\/?$/.test(window.location.pathname);
+
+		let lastFriendLinkSpeakAt = 0;
+		const speakFriendLinkWelcome = () => {
+			const talk = () => {
+				// 离开友链页后立刻停止
+				if (!isFriendLinkPage()) return true;
+				const show = window.showWaifuMessage;
+				// 看板娘尚未初始化完成（移动端不加载），稍后重试
+				if (typeof show !== "function") return false;
+				if (Date.now() - lastFriendLinkSpeakAt < 3000) return true;
+				lastFriendLinkSpeakAt = Date.now();
+				const index = Math.floor(Math.random() * friendLinkWaifuMessages.length);
+				show(friendLinkWaifuMessages[index], 6000);
+				return true;
+			};
+
+			if (talk()) return;
+			let tries = 0;
+			const timer = setInterval(() => {
+				tries += 1;
+				if (talk() || tries >= 20) clearInterval(timer);
+			}, 500);
+		};
+
+		// 5) 首次进入 + swup 切页后各检查一次
+		const refresh = () => {
+			markBrokenAvatars();
+			document.querySelectorAll(".friend-copy-btn.is-copied").forEach((button) => {
+				button.classList.remove("is-copied");
+			});
+			// 重新进入页面时恢复为展开状态
+			document.querySelectorAll("[data-friend-info-panel]").forEach((panel) => {
+				panel.classList.remove("is-collapsed");
+			});
+			document.querySelectorAll("[data-friend-info-toggle]").forEach((toggle) => {
+				toggle.classList.remove("is-collapsed");
+				toggle.setAttribute("aria-expanded", "true");
+				toggle.setAttribute("title", "收起详细信息");
+			});
+			speakFriendLinkWelcome();
+		};
+
+		refresh();
+
+		const bindSwupHook = () => {
+			if (!window.swup || !window.swup.hooks || window.__friendLinkSwupHooked) return;
+			window.__friendLinkSwupHooked = true;
+			window.swup.hooks.on("page:view", refresh);
+		};
+
+		if (window.swup && window.swup.hooks) {
+			bindSwupHook();
+		} else {
+			document.addEventListener("swup:enable", bindSwupHook, { once: true });
+		}
+	})();
+</script>

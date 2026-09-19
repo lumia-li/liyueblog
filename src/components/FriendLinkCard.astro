@@ -1,0 +1,85 @@
+---
+import { Icon } from "astro-icon/components";
+import { url } from "../utils/url-utils";
+
+interface Props {
+	class?: string;
+	name: string;
+	avatar: string;
+	description: string;
+	url: string;
+	tags?: string[];
+	style?: string;
+}
+
+const { name, avatar, description, tags = [], style } = Astro.props;
+// 注意：这里不用 url 作为变量名，避免与 url() 工具函数冲突
+const href = Astro.props.url;
+const className = Astro.props.class;
+
+// 外链头像直接用原地址，public/ 下的绝对路径套上 base
+const avatarSrc = /^(?:https?:)?\/\//i.test(avatar) ? avatar : url(avatar);
+---
+
+<a
+	href={href}
+	target="_blank"
+	rel="noopener noreferrer nofollow"
+	aria-label={`访问 ${name}`}
+	class:list={[
+		"card-base group flex items-center gap-3 p-3",
+		"hover:bg-[var(--btn-card-bg-hover)] active:bg-[var(--btn-card-bg-active)]",
+		className,
+	]}
+	style={style}
+>
+	<div class="relative shrink-0 w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-white dark:bg-white/95 ring-1 ring-black/5 dark:ring-white/10">
+		<Icon name="fa6-solid:user" class="absolute text-[1.25rem] text-black/20"></Icon>
+		<img
+			class="friend-avatar-img absolute inset-0 w-full h-full object-cover transition duration-300 group-hover:scale-105"
+			src={avatarSrc}
+			alt={`${name} 的头像`}
+			width="48"
+			height="48"
+			loading="lazy"
+			decoding="async"
+			referrerpolicy="no-referrer"
+		/>
+	</div>
+
+	<div class="min-w-0 flex-1">
+		<div class="font-bold text-[0.9375rem] text-90 truncate transition group-hover:text-[var(--primary)]">
+			{name}
+		</div>
+		{
+			description && (
+				<p class="text-75 text-xs mt-0.5 leading-5 line-clamp-2 text-balance">
+					{description}
+				</p>
+			)
+		}
+		{
+			tags && tags.length > 0 && (
+				<div class="flex flex-wrap gap-1 mt-1.5">
+					{tags.map((tag) => (
+						<span class="text-[0.625rem] leading-4 px-1.5 rounded-full bg-[var(--btn-regular-bg)] text-[var(--btn-content)]">
+							{tag}
+						</span>
+					))}
+				</div>
+			)
+		}
+	</div>
+
+	<Icon
+		name="fa6-solid:arrow-up-right-from-square"
+		class="shrink-0 text-[0.75rem] text-[var(--primary)] opacity-0 -translate-x-1 transition group-hover:opacity-100 group-hover:translate-x-0"
+	></Icon>
+</a>
+
+<style>
+/* 头像加载失败时（由页面脚本加上 friend-avatar-failed）隐藏裂图，露出占位图标 */
+.friend-avatar-img.friend-avatar-failed {
+	opacity: 0;
+}
+</style>

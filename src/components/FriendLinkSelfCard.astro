@@ -1,0 +1,216 @@
+---
+import { Icon } from "astro-icon/components";
+import type { FriendLinkSelf } from "../types/config";
+import ImageWrapper from "./misc/ImageWrapper.astro";
+
+interface Props {
+	class?: string;
+	self: FriendLinkSelf;
+	style?: string;
+}
+
+const { self, style } = Astro.props;
+const className = Astro.props.class;
+
+const avatarForCopy = self.avatarUrl || self.avatar;
+
+// 名片字段：一行一项，信息全部可见，行尾单独复制
+const fields = [
+	{ label: "名称", value: self.name },
+	{ label: "简介", value: self.description },
+	{ label: "链接", value: self.url },
+	{ label: "头像", value: avatarForCopy },
+];
+
+// 一键复制：输出可直接粘进对方友链配置的 JSON
+const copyAll = JSON.stringify(
+	{
+		name: self.name,
+		description: self.description,
+		avatar: avatarForCopy,
+		url: self.url,
+	},
+	null,
+	2,
+);
+---
+
+<div class:list={["card-base p-5 md:p-6", className]} style={style}>
+	<div class="flex flex-col md:flex-row md:items-center gap-5">
+		<div class="shrink-0 mx-auto md:mx-0">
+			<div class="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden bg-white dark:bg-white/95 border-2 border-[var(--btn-regular-bg-hover)]">
+				<ImageWrapper
+					src={self.avatar}
+					alt={`${self.name} 的头像`}
+					class="w-full h-full"
+				></ImageWrapper>
+			</div>
+		</div>
+
+		<div class="min-w-0 flex-1 text-center md:text-left">
+			<div class="text-[0.6875rem] font-bold px-2 py-0.5 rounded-full bg-[var(--btn-regular-bg)] text-[var(--btn-content)] inline-block mb-2">
+				我的名片 · 欢迎抄走
+			</div>
+			<div class="text-xl font-bold text-90 truncate">{self.name}</div>
+			<p class="text-75 text-sm mt-1">{self.description}</p>
+			<a
+				href={self.url}
+				target="_blank"
+				rel="noopener noreferrer"
+				class="inline-flex items-center gap-1.5 mt-2 text-sm text-[var(--primary)] hover:underline break-all"
+			>
+				<Icon name="fa6-solid:link" class="text-xs shrink-0"></Icon>
+				{self.url}
+			</a>
+			{
+				self.tags && self.tags.length > 0 && (
+					<div class="flex flex-wrap gap-1.5 mt-2 justify-center md:justify-start">
+						{self.tags.map((tag) => (
+							<span class="text-[0.6875rem] leading-5 px-2 rounded-full bg-[var(--btn-regular-bg)] text-[var(--btn-content)]">
+								{tag}
+							</span>
+						))}
+					</div>
+				)
+			}
+		</div>
+	</div>
+
+	<div class="border-t border-[var(--line-divider)] mt-5 pt-4" data-friend-info-root>
+		<div class="flex items-start justify-between gap-3">
+			<div class="flex items-center gap-2 text-50 text-xs min-w-0">
+				<Icon name="fa6-solid:circle-info" class="shrink-0"></Icon>
+				<span>把本站加进你的友链里，信息可以直接复制下面这几项</span>
+			</div>
+
+			<button
+				type="button"
+				class="friend-info-toggle btn-regular rounded-lg h-7 px-2.5 gap-1 text-xs font-bold active:scale-95 shrink-0"
+				data-friend-info-toggle
+				aria-expanded="true"
+				aria-controls="friend-info-panel"
+				title="收起详细信息"
+			>
+				<span class="friend-info-toggle-label" data-label-expanded>收起</span>
+				<span class="friend-info-toggle-label" data-label-collapsed>展开</span>
+				<Icon name="fa6-solid:chevron-up" class="friend-info-toggle-icon text-[0.625rem]"></Icon>
+			</button>
+		</div>
+
+		<div class="friend-info-panel" id="friend-info-panel" data-friend-info-panel>
+			<div class="friend-info-panel-inner">
+				<div class="flex flex-col divide-y divide-[var(--line-divider)] pt-3">
+					{
+						fields.map((field) => (
+							<div class="flex items-start gap-3 py-2">
+								<span class="shrink-0 w-10 text-xs font-medium text-50 leading-5">{field.label}</span>
+								<span class="min-w-0 flex-1 text-sm text-90 break-all select-all leading-5">{field.value}</span>
+							</div>
+						))
+					}
+				</div>
+
+				<div class="mt-3">
+					<button
+						type="button"
+						class="friend-copy-btn btn-regular rounded-lg h-9 px-3 gap-2 text-sm font-bold active:scale-95"
+						data-friend-copy={copyAll}
+					>
+						<Icon name="fa6-solid:copy" class="friend-copy-icon text-sm"></Icon>
+						<Icon name="fa6-solid:check" class="friend-copy-done text-sm"></Icon>
+						<span>一键复制全部</span>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+.friend-copy-done {
+	display: none;
+}
+
+.friend-copy-btn.is-copied {
+	color: var(--primary);
+}
+
+.friend-copy-btn.is-copied .friend-copy-icon {
+	display: none;
+}
+
+.friend-copy-btn.is-copied .friend-copy-done {
+	display: inline-flex;
+}
+
+/* ---------------- 折叠按钮 ---------------- */
+.friend-info-toggle {
+	transition:
+		color 0.25s ease,
+		background-color 0.25s ease,
+		box-shadow 0.25s ease,
+		transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.friend-info-toggle:hover {
+	color: var(--primary);
+}
+
+/* 默认展示「收起」，折叠后展示「展开」 */
+.friend-info-toggle-label[data-label-collapsed] {
+	display: none;
+}
+
+.friend-info-toggle.is-collapsed .friend-info-toggle-label[data-label-expanded] {
+	display: none;
+}
+
+.friend-info-toggle.is-collapsed .friend-info-toggle-label[data-label-collapsed] {
+	display: inline;
+}
+
+/* 箭头：展开时朝上，折叠后翻转朝下 */
+.friend-info-toggle-icon {
+	transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.friend-info-toggle:hover .friend-info-toggle-icon {
+	transform: translateY(-1px);
+}
+
+.friend-info-toggle.is-collapsed .friend-info-toggle-icon {
+	transform: rotate(180deg);
+}
+
+/* ---------------- 折叠面板（高度自适应动画） ---------------- */
+.friend-info-panel {
+	display: grid;
+	grid-template-rows: 1fr;
+	opacity: 1;
+	transform: translateY(0);
+	transition:
+		grid-template-rows 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+		transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 0.3s ease;
+}
+
+.friend-info-panel-inner {
+	min-height: 0;
+	overflow: hidden;
+}
+
+.friend-info-panel.is-collapsed {
+	grid-template-rows: 0fr;
+	opacity: 0;
+	transform: translateY(-0.25rem);
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.friend-info-panel,
+	.friend-info-toggle,
+	.friend-info-toggle-icon {
+		transition: none;
+	}
+}
+</style>

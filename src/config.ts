@@ -31,6 +31,23 @@ export const siteConfig: SiteConfig = {
 	},
 	favicon: [
 		// Leave this array empty to use the default favicon
+		// 浏览器标签页图标：由 public/images/avatar.webp 生成，改头像后重新导出这几个尺寸即可
+		{
+			src: "/favicon/favicon-avatar-32.png",
+			sizes: "32x32",
+		},
+		{
+			src: "/favicon/favicon-avatar-128.png",
+			sizes: "128x128",
+		},
+		{
+			src: "/favicon/favicon-avatar-180.png",
+			sizes: "180x180",
+		},
+		{
+			src: "/favicon/favicon-avatar-192.png",
+			sizes: "192x192",
+		},
 		// {
 		//   src: '/favicon/icon.png',    // Path of the favicon, relative to the /public directory
 		//   theme: 'light',              // (Optional) Either 'light' or 'dark', set only if you have different favicons for light and dark mode
@@ -49,6 +66,10 @@ export const navBarConfig: NavBarConfig = {
 			url: "/thoughts/",
 		},
 		{
+			name: "友链",
+			url: "/friends/",
+		},
+		{
 			name: "统计",
 			url: "https://u.liyueovo.top/share/BNQHKRVIrz8MsQiu", // Internal links should not include the base path, as it is automatically added
 			external: true, // Show an external link icon and will open in a new tab
@@ -57,7 +78,7 @@ export const navBarConfig: NavBarConfig = {
 };
 
 export const profileConfig: ProfileConfig = {
-	avatar: "assets/images/demo-avatar.png", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
+	avatar: "/images/avatar.webp", // Relative to the /src directory. Relative to the /public directory if it starts with '/'
 	name: "璃月",
 	bio: "欢迎来到璃月小站，这里的内容有的可能会帮到你哦",
 	links: [
