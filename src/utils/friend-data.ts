@@ -32,8 +32,12 @@ export type FriendDataEntry = {
 	checks?: {
 		siteReachable?: boolean;
 		siteStatus?: number;
+		/** 站点没通过时的原因（403 防爬、超时这类"说不准"的也会记在这里） */
+		siteNote?: string;
 		avatarReachable?: boolean;
 		avatarStatus?: number;
+		/** 头像没通过时的原因 */
+		avatarNote?: string;
 		backlinkVerified?: boolean;
 	};
 	/** 仅在 applications/ 里有意义：pending（首次申请）/ update（信息更新） */

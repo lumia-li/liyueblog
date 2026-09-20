@@ -281,20 +281,26 @@ export const POST: APIRoute = async ({ request }) => {
 		Boolean(hostOf(draft.backlink)) &&
 		hostOf(draft.backlink) !== hostOf(draft.url);
 
+	// 只有「确定有问题」的失败才提示申请人；403 / 超时 / 5xx 这类"说不准"的
+	// 只记进申请文件给站长看，避免把正常申请吓退（详见 utils/link-check.ts）
 	const warnings: string[] = [];
-	if (!siteCheck.ok) {
+	if (!siteCheck.ok && !siteCheck.ambiguous) {
 		warnings.push(
-			`站点暂时没检测通过：${siteCheck.reason || siteCheck.error || "未知原因"}。如果是防爬导致（403 很常见）可以忽略，但建议自己打开浏览器确认一下。`,
+			`你的站点没检测通过：${siteCheck.reason || siteCheck.error || "未知原因"}。确认地址没写错就行，审核时我也会再看一遍。`,
 		);
 	}
-	if (avatarCheck && !avatarCheck.ok) {
+	if (avatarCheck && !avatarCheck.ok && !avatarCheck.ambiguous) {
 		warnings.push(
-			`头像地址没检测通过：${avatarCheck.reason || avatarCheck.error || "未知原因"}。建议换一个能直接打开的图片直链，不然友链卡片上会显示默认小人图标。`,
+			`你的头像地址没检测通过：${avatarCheck.reason || avatarCheck.error || "未知原因"}。建议换一个能直接打开的图片直链，不然友链卡片上会显示默认图标。`,
 		);
 	}
 	if (backlinkResult && draft.backlink) {
 		if (backlinkResult.verified) {
 			warnings.push("已在你填的友链页里找到指向本站的链接，双向友链确认 ✓");
+		} else if (backlinkCheck && !backlinkCheck.ok) {
+			warnings.push(
+				`你的友链页这次没能打开（${backlinkCheck.reason || backlinkResult.reason || "未知原因"}），所以没法自动确认双向链接，审核时我会手动看一眼。`,
+			);
 		} else {
 			warnings.push(
 				`没在你填的友链页里找到指向本站首页的链接（${backlinkResult.reason || "未找到"}）。把本站加进你的友链再申请，通过会更快。`,
@@ -310,10 +316,17 @@ export const POST: APIRoute = async ({ request }) => {
 	const checks = {
 		siteReachable: siteCheck.ok,
 		...(siteCheck.status ? { siteStatus: siteCheck.status } : {}),
+		// 失败原因一律记下来，站长审核时能看到"是防爬还是真的打不开"
+		...(siteCheck.ok
+			? {}
+			: { siteNote: (siteCheck.reason || siteCheck.error || "").slice(0, 100) }),
 		...(avatarCheck
 			? {
 					avatarReachable: avatarCheck.ok,
 					...(avatarCheck.status ? { avatarStatus: avatarCheck.status } : {}),
+					...(avatarCheck.ok
+						? {}
+						: { avatarNote: (avatarCheck.reason || avatarCheck.error || "").slice(0, 100) }),
 				}
 			: {}),
 		...(backlinkResult ? { backlinkVerified: backlinkResult.verified } : {}),

@@ -25,9 +25,17 @@ export type UrlCheck = {
 	finalUrl?: string;
 	/** 给申请人看的「人话」原因 */
 	reason?: string;
-	/** 技术错误原文（连接超时、域名解析失败等），便于排查 */
+	/** 技术细节（错误码 + 原始信息），便于排查 */
 	error?: string;
+	/**
+	 * true = 这类失败「说不准」：可能是防爬（403）、限流、超时、
+	 * 对方服务器抽风。这种不要拿去吓唬申请人，只记给站长看。
+	 */
+	ambiguous?: boolean;
 };
+
+/** 一次失败的判定结果 */
+type FailureInfo = { reason: string; detail: string; ambiguous: boolean };
 
 function requestHeaders(): Record<string, string> {
 	return {
@@ -37,24 +45,79 @@ function requestHeaders(): Record<string, string> {
 	};
 }
 
-/** 常见 HTTP 状态码 → 申请人能看懂的解释 */
-function describeStatus(status: number): string {
-	if (status === 401) return "HTTP 401（站点需要登录才能访问）";
-	if (status === 403) return "HTTP 403（对方站点可能在挡爬虫，你可以在浏览器里确认一下能否打开）";
-	if (status === 404) return "HTTP 404（页面不存在，检查一下地址有没有写错）";
-	if (status === 429) return "HTTP 429（对方站点限流，稍后再试）";
-	if (status >= 500) return `HTTP ${status}（对方服务器报错，可能是临时的）`;
-	if (status >= 400) return `HTTP ${status}`;
-	return `HTTP ${status}`;
+/** 常见 HTTP 状态码 → 申请人能看懂的解释（并判断这个失败是不是"说不准"） */
+function describeStatus(status: number): FailureInfo {
+	const detail = `HTTP ${status}`;
+	if (status === 401) {
+		return { reason: "HTTP 401（站点需要登录才能访问）", detail, ambiguous: false };
+	}
+	if (status === 403) {
+		return {
+			reason: "HTTP 403（对方站点可能在挡爬虫）",
+			detail,
+			ambiguous: true,
+		};
+	}
+	if (status === 404 || status === 410) {
+		return { reason: `HTTP ${status}（页面不存在，检查一下地址有没有写错）`, detail, ambiguous: false };
+	}
+	if (status === 429) {
+		return { reason: "HTTP 429（对方站点限流）", detail, ambiguous: true };
+	}
+	if (status >= 500) {
+		return { reason: `HTTP ${status}（对方服务器报错，可能只是临时故障）`, detail, ambiguous: true };
+	}
+	return { reason: `HTTP ${status}`, detail, ambiguous: true };
 }
 
-/** 网络层错误 → 人话 */
-function describeError(message: string): string {
-	if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message)) return "域名解析失败（地址可能拼错了）";
-	if (/ECONNREFUSED/i.test(message)) return "连接被拒绝（对方没在这个端口提供服务）";
-	if (/certificate|SSL|TLS|self-signed/i.test(message)) return "HTTPS 证书有问题";
-	if (/timeout|timed out|aborted|TimeoutError/i.test(message)) return "请求超时（站点太慢或拒绝了请求）";
-	return "请求失败";
+/**
+ * 网络层错误 → 人话。
+ *
+ * 注意：undici（Node / Vercel 上的 fetch）会把真正的原因塞进 `error.cause`，
+ * 外层只有一句没用的 "fetch failed"——必须往下挖一层才看得出是域名没解析、
+ * 还是连接超时、还是证书有问题。
+ */
+function describeFailure(error: unknown): FailureInfo {
+	const toRecord = (value: unknown) =>
+		value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+
+	const cause = error instanceof Error ? error.cause : undefined;
+	const causeRecord = toRecord(cause);
+	const errorRecord = toRecord(error);
+	const code = String(causeRecord?.code || errorRecord?.code || "").toUpperCase();
+	const causeMessage = cause instanceof Error ? cause.message : cause ? String(cause) : "";
+	const message = error instanceof Error ? error.message : String(error);
+	const detail = [code, causeMessage || message].filter(Boolean).join(" ").slice(0, 160);
+	const probe = `${code} ${causeMessage} ${message}`;
+
+	if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(probe)) {
+		return {
+			reason: "域名解析失败（地址可能拼错了，或者域名已经失效）",
+			detail,
+			ambiguous: false,
+		};
+	}
+	if (/ECONNREFUSED/i.test(probe)) {
+		return { reason: "连接被拒绝（对方服务器没有接受这次连接）", detail, ambiguous: false };
+	}
+	if (/CERT_HAS_EXPIRED|UNABLE_TO_VERIFY|certificate|self.signed|SSL|TLS/i.test(probe)) {
+		return { reason: "HTTPS 证书有问题（浏览器里应该也会报警）", detail, ambiguous: false };
+	}
+	if (/ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|timed? ?out|aborted|TimeoutError/i.test(probe)) {
+		return {
+			reason: "连接超时（站点太慢，或者拒绝了来自服务器的请求）",
+			detail,
+			ambiguous: true,
+		};
+	}
+	if (/ECONNRESET|UND_ERR_SOCKET|socket hang up/i.test(probe)) {
+		return { reason: "连接被中断（对方可能拒绝了这次请求）", detail, ambiguous: true };
+	}
+	return {
+		reason: "请求失败（对方可能屏蔽了服务器请求，或者站点暂时不可用）",
+		detail,
+		ambiguous: true,
+	};
 }
 
 /** 按上限读取响应体文本（读满即断，避免把大页面整个拉进来） */
@@ -102,11 +165,12 @@ export async function fetchUrl(
 		});
 
 		const ok = response.status < 400;
+		const info = ok ? null : describeStatus(response.status);
 		const result: UrlCheck & { body?: string } = {
 			ok,
 			status: response.status,
 			finalUrl: response.url || url,
-			...(ok ? {} : { reason: describeStatus(response.status) }),
+			...(info ? { reason: info.reason, error: info.detail, ambiguous: info.ambiguous } : {}),
 		};
 
 		if (ok && wantBody) {
@@ -118,8 +182,13 @@ export async function fetchUrl(
 
 		return result;
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		return { ok: false, error: message, reason: describeError(message) };
+		const failure = describeFailure(error);
+		return {
+			ok: false,
+			error: failure.detail,
+			reason: failure.reason,
+			ambiguous: failure.ambiguous,
+		};
 	}
 }
 
