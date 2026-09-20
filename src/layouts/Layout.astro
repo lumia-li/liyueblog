@@ -1593,6 +1593,22 @@ const homeBannerHeight = "56vh";
 
 	                        live2dElement.style.touchAction = "none";
 
+	                        // 睡觉期间，鼠标悬停到看板娘身上时，用睡觉文案替换默认的悬停提示
+	                        const sleepHoverMessageInterval = 1200;
+	                        let lastSleepHoverAt = 0;
+	                        const isOnLive2dElement = (event: Event) => {
+	                            const target = event.target;
+	                            return target instanceof Element && Boolean(target.closest("#live2d"));
+	                        };
+	                        const showSleepingHoverMessage = () => {
+	                            const now = Date.now();
+	                            if (now - lastSleepHoverAt < sleepHoverMessageInterval) {
+	                                return;
+	                            }
+	                            lastSleepHoverAt = now;
+	                            showWaifuMessage(randomPick(sleepingMessages), 3000);
+	                        };
+
 	                        // The Live2D runtime treats every window mousemove as a wake-up signal.
 	                        // Keep those events away from it until the explicit double tap wakes her.
 	                        window.addEventListener("mousemove", (event) => {
@@ -1600,7 +1616,41 @@ const homeBannerHeight = "56vh";
 	                                return;
 	                            }
 	                            event.stopImmediatePropagation();
+	                            if (isOnLive2dElement(event)) {
+	                                showSleepingHoverMessage();
+	                            }
 	                        }, true);
+
+	                        // 睡觉时鼠标移入看板娘，显示睡觉文案而不是 waifu-tips.json 的默认悬停提示
+	                        window.addEventListener("mouseover", (event) => {
+	                            if (!isWaifuSleeping() || !isOnLive2dElement(event)) {
+	                                return;
+	                            }
+	                            event.stopImmediatePropagation();
+	                            showSleepingHoverMessage();
+	                        }, true);
+
+	                        // 睡觉期间，waifu-tips.js 自动弹出的气泡（欢迎语、每 20 秒的随机语等）也统一换成睡觉文案
+	                        const sleepingMessageTexts = new Set(sleepingMessages);
+	                        const waifuTipsElement = document.getElementById("waifu-tips");
+	                        if (waifuTipsElement) {
+	                            const replaceTipsWithSleepingMessage = () => {
+	                                if (!isWaifuSleeping()) {
+	                                    return;
+	                                }
+	                                const currentTipsText = (waifuTipsElement.textContent || "").trim();
+	                                if (!currentTipsText || sleepingMessageTexts.has(currentTipsText)) {
+	                                    return;
+	                                }
+	                                showWaifuMessage(randomPick(sleepingMessages), 6000, { force: true });
+	                            };
+	                            new MutationObserver(replaceTipsWithSleepingMessage).observe(waifuTipsElement, {
+	                                childList: true,
+	                                characterData: true,
+	                                subtree: true
+	                            });
+	                            replaceTipsWithSleepingMessage();
+	                        }
 
 	                        const keepSleepingUntilDoubleTap = (event) => {
 	                            if (!isWaifuSleeping()) {
