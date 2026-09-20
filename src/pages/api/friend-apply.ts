@@ -396,6 +396,8 @@ export const POST: APIRoute = async ({ request }) => {
 				...(avatarAuto ? { avatarAuto: true } : {}),
 				url: draft.url,
 				...(draft.backlink ? { backlink: draft.backlink } : {}),
+				// 没填友链页时也要留个明确标记：审核时一眼看出这条得手动核对回链
+				backlinkProvided: Boolean(draft.backlink),
 				...(approvedBefore ? { update: true } : {}),
 				status: approvedBefore ? "update" : "pending",
 				submittedAt: new Date().toISOString(),

@@ -19,6 +19,8 @@
 	let avatar = "";
 	let backlink = "";
 	let website = ""; // 蜜罐字段：正常访客看不见，机器人会填
+	/** 本次提交有没有填「友链页」（提交时先记下来，因为成功后输入框会被清空） */
+	let submittedWithoutBacklink = false;
 
 	let submitting = false;
 	let errorMessage = "";
@@ -168,6 +170,7 @@
 		submittedState = "";
 		fieldChecks = {};
 		textChecks = {};
+		submittedWithoutBacklink = false;
 		// 用原生 <dialog>.showModal()：渲染在 top layer，
 		// 不受页面里 will-change: transform 容器的影响
 		dialog?.showModal();
@@ -207,7 +210,8 @@
 			const data = (await response.json().catch(() => null)) as {
 				ok?: boolean;
 				message?: string;
-				field?: CheckField;
+				/** 服务端把不合格的字段挂在这里：链接类是 url/avatar/backlink，文本类是 name/description */
+				field?: CheckField | TextField;
 				statusToken?: string;
 				state?: string;
 				warnings?: string[];
@@ -258,6 +262,7 @@
 				// 隐私模式等场景 localStorage 不可用，忽略即可，不影响提交结果
 			}
 
+			submittedWithoutBacklink = !backlink.trim();
 			siteName = "";
 			siteUrl = "";
 			avatar = "";
@@ -329,6 +334,18 @@
 								<span>{warning}</span>
 							</div>
 						{/each}
+					</div>
+				{/if}
+
+				{#if submittedWithoutBacklink}
+					<div class="flex items-start gap-2 text-xs text-75 text-left">
+						<Icon
+							icon="fa6-solid:circle-info"
+							class="mt-0.5 shrink-0 text-[var(--primary)]"
+						></Icon>
+						<span>
+							你没填「友链页」，审核会慢一点——站长得手动去你的站上确认有没有加回本站。下次填上它会快很多。
+						</span>
 					</div>
 				{/if}
 

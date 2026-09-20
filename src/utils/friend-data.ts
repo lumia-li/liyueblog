@@ -28,6 +28,11 @@ export type FriendDataEntry = {
 	url: string;
 	/** 申请人自己的友链页地址，用来校验双向链接 */
 	backlink?: string;
+	/**
+	 * 申请人有没有填「友链页」。
+	 * false = 没填，双向链接没法自动确认，**需要站长手动去他站上核对**。
+	 */
+	backlinkProvided?: boolean;
 	/** true = 该站点已通过审核，这次提交的是「信息更新」而不是首次申请 */
 	update?: boolean;
 	/** true = 头像不是申请人填的，而是从他站点首页自动抓的（供站长核对） */
