@@ -47,7 +47,6 @@ const LIMITS = {
 	url: 200,
 	avatar: 300,
 	backlink: 200,
-	contact: 60,
 	description: 80,
 } as const;
 
@@ -68,7 +67,6 @@ type ApplicationDraft = {
 	url: string;
 	avatar: string;
 	backlink: string;
-	contact: string;
 	description: string;
 };
 
@@ -160,7 +158,6 @@ function parseApplication(raw: unknown): ParseResult {
 		url: "",
 		avatar: "",
 		backlink: "",
-		contact: "",
 		description: "",
 	};
 
@@ -174,7 +171,6 @@ function parseApplication(raw: unknown): ParseResult {
 		url: readText(body.url, LIMITS.url),
 		avatar: readText(body.avatar, LIMITS.avatar),
 		backlink: readText(body.backlink, LIMITS.backlink),
-		contact: readText(body.contact, LIMITS.contact),
 		description: readText(body.description, LIMITS.description),
 	};
 
@@ -400,7 +396,6 @@ export const POST: APIRoute = async ({ request }) => {
 				...(avatarAuto ? { avatarAuto: true } : {}),
 				url: draft.url,
 				...(draft.backlink ? { backlink: draft.backlink } : {}),
-				...(draft.contact ? { contact: draft.contact } : {}),
 				...(approvedBefore ? { update: true } : {}),
 				status: approvedBefore ? "update" : "pending",
 				submittedAt: new Date().toISOString(),

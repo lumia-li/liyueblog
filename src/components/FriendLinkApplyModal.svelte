@@ -18,7 +18,6 @@
 	let intro = "";
 	let avatar = "";
 	let backlink = "";
-	let contact = "";
 	let website = ""; // 蜜罐字段：正常访客看不见，机器人会填
 
 	let submitting = false;
@@ -201,7 +200,6 @@
 					url: siteUrl,
 					avatar,
 					backlink,
-					contact,
 					description: intro,
 					website,
 				}),
@@ -264,7 +262,6 @@
 			siteUrl = "";
 			avatar = "";
 			backlink = "";
-			contact = "";
 			intro = "";
 		} catch {
 			errorMessage = "网络异常，提交失败，请稍后再试";
@@ -458,20 +455,6 @@
 							{fieldChecks.backlink.message}
 						</p>
 					{/if}
-				</label>
-
-				<label class="flex flex-col gap-1.5">
-					<span class="text-75 text-xs font-medium">
-						联系方式
-						<span class="text-30">（可选，方便审核时联系你）</span>
-					</span>
-					<input
-						bind:value={contact}
-						type="text"
-						maxlength="60"
-						placeholder="邮箱 / QQ / GitHub"
-						class={inputClass}
-					/>
 				</label>
 
 				<!-- 蜜罐：正常访客看不到 -->
