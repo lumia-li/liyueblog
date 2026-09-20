@@ -28,6 +28,8 @@ export type FriendDataEntry = {
 	contact?: string;
 	/** true = 该站点已通过审核，这次提交的是「信息更新」而不是首次申请 */
 	update?: boolean;
+	/** true = 头像不是申请人填的，而是从他站点首页自动抓的（供站长核对） */
+	avatarAuto?: boolean;
 	/** 提交时的自动检测结果，供站长审核参考（不作为通过/拒绝依据） */
 	checks?: {
 		siteReachable?: boolean;

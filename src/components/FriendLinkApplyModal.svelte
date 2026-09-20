@@ -6,6 +6,8 @@
 	export let title = "申请友链";
 	export let description = "";
 	export let endpoint = "/api/friend-apply";
+	/** 链接体检接口：填完链接失焦 / 点提交时先查一次（见 src/pages/api/friend-link-check.ts） */
+	export let checkEndpoint = "/api/friend-link-check";
 
 	let dialog: HTMLDialogElement | undefined;
 	let nameInput: HTMLInputElement | undefined;
@@ -26,11 +28,111 @@
 	/** update = 这次提交的是对「已通过友链」的信息更新 */
 	let submittedState = "";
 
+	// ── 链接体检：结论显示在对应输入框下方 ──────────────────────
+	type FieldCheck = { level: "pass" | "note" | "error"; message?: string };
+	type CheckField = "url" | "avatar" | "backlink";
+
+	let fieldChecks: Partial<Record<CheckField, FieldCheck>> = {};
+	let checkingLinks = false;
+	/** 自动抓取填进头像框的那个地址（换站点时跟着清掉，避免留着别人家的图） */
+	let autoFilledAvatar = "";
+
+	function clearCheck(field: CheckField) {
+		if (!fieldChecks[field]) return;
+		const next = { ...fieldChecks };
+		delete next[field];
+		fieldChecks = next;
+	}
+
+	async function checkLinks(fields: CheckField[] = ["url", "avatar", "backlink"]) {
+		const payload: Record<string, string> = {};
+		if (fields.includes("url") && siteUrl.trim()) payload.url = siteUrl.trim();
+		if (fields.includes("avatar") && avatar.trim()) payload.avatar = avatar.trim();
+		if (fields.includes("backlink") && backlink.trim()) payload.backlink = backlink.trim();
+
+		// 被清空的字段顺手把旧结论也去掉
+		const next = { ...fieldChecks };
+		for (const field of fields) {
+			if (!payload[field]) delete next[field];
+		}
+		fieldChecks = next;
+		if (Object.keys(payload).length === 0) return;
+
+		checkingLinks = true;
+		try {
+			const response = await fetch(checkEndpoint, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const data = (await response.json().catch(() => null)) as {
+				ok?: boolean;
+				fields?: Partial<Record<CheckField, FieldCheck>>;
+				avatarSuggestion?: { url: string; source: string };
+			} | null;
+			if (!response.ok || !data?.ok || !data.fields) return;
+
+			// 没填头像 → 把抓来的图填进输入框（填完静默验证一次，打不开就撤回）
+			if (data.avatarSuggestion?.url && !avatar.trim() && fields.includes("url")) {
+				await applyAvatarSuggestion(data.avatarSuggestion.url);
+			}
+
+			fieldChecks = { ...fieldChecks, ...data.fields };
+		} catch {
+			// 检测接口挂了不拦着用户填表：提交时服务端还会再查一遍
+		} finally {
+			checkingLinks = false;
+		}
+	}
+
+	/**
+	 * 把自动抓到的头像填进输入框。
+	 * 填完先静默验证一次：确认能打开才留着；打不开就直接撤掉，
+	 * 不给申请人弹任何提示（这图不是他填的，不该让他负责）。
+	 */
+	async function applyAvatarSuggestion(url: string) {
+		avatar = url;
+		autoFilledAvatar = url;
+		try {
+			const response = await fetch(checkEndpoint, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ avatar: url }),
+			});
+			const data = (await response.json().catch(() => null)) as {
+				ok?: boolean;
+				fields?: Partial<Record<CheckField, FieldCheck>>;
+			} | null;
+			if (!response.ok || !data?.ok || data.fields?.avatar?.level !== "pass") {
+				avatar = "";
+				autoFilledAvatar = "";
+			}
+		} catch {
+			avatar = "";
+			autoFilledAvatar = "";
+		}
+	}
+
+	/** 改站点地址时，顺手把"上一个站点自动抓来的头像"清掉 */
+	function onUrlInput() {
+		clearCheck("url");
+		if (autoFilledAvatar && avatar === autoFilledAvatar) {
+			avatar = "";
+			autoFilledAvatar = "";
+		}
+	}
+
+	/** 有「确定有问题」的字段时不许提交（note 只是提示，不拦） */
+	const hasBlockingError = (checks: Partial<Record<CheckField, FieldCheck>> = fieldChecks) =>
+		Object.values(checks).some((check) => check?.level === "error");
+
 	$: canSubmit =
 		!submitting &&
+		!checkingLinks &&
 		siteName.trim() !== "" &&
 		siteUrl.trim() !== "" &&
-		intro.trim() !== "";
+		intro.trim() !== "" &&
+		!hasBlockingError(fieldChecks);
 
 	const inputClass =
 		"w-full h-10 rounded-lg px-3 text-sm bg-[var(--btn-regular-bg)] text-90 " +
@@ -42,6 +144,7 @@
 		success = false;
 		warnings = [];
 		submittedState = "";
+		fieldChecks = {};
 		// 用原生 <dialog>.showModal()：渲染在 top layer，
 		// 不受页面里 will-change: transform 容器的影响
 		dialog?.showModal();
@@ -53,30 +156,15 @@
 		dialog?.close();
 	}
 
-	// 点击遮罩关闭：必须「按下」和「抬起」都落在弹窗外层（dialog 自身铺满全屏，
-	// 面板居中）才算真正点了遮罩。
-	// 只判断 click 的 target 是不够的：在输入框里按住左键拖选文本时，
-	// click 的 target 会变成 mousedown/mouseup 的共同祖先——也就是 dialog 本身，
-	// 于是弹窗会在拖选文字的过程中被误关。
-	let pressedOnBackdrop = false;
-
-	function handleDialogMouseDown(event: MouseEvent) {
-		pressedOnBackdrop = event.target === dialog;
-	}
-
-	function handleDialogMouseUp(event: MouseEvent) {
-		const releasedOnBackdrop = event.target === dialog;
-		if (pressedOnBackdrop && releasedOnBackdrop) {
-			pressedOnBackdrop = false;
-			closeDialog();
-		}
-	}
-
 	async function submit() {
-		if (!canSubmit) return;
+		if (submitting) return;
 		submitting = true;
 		errorMessage = "";
 		try {
+			// ① 先做链接体检：有「确定有问题」的字段就停在这一步，不触发申请
+			await checkLinks();
+			if (hasBlockingError()) return;
+
 			const response = await fetch(endpoint, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -93,12 +181,21 @@
 			const data = (await response.json().catch(() => null)) as {
 				ok?: boolean;
 				message?: string;
+				field?: CheckField;
 				statusToken?: string;
 				state?: string;
 				warnings?: string[];
 			} | null;
 
 			if (!response.ok || !data?.ok) {
+				// 服务端把「检测不通过」的原因挂在字段上 → 显示到对应输入框下方
+				if (data?.field) {
+					fieldChecks = {
+						...fieldChecks,
+						[data.field]: { level: "error", message: data.message || "检测没通过" },
+					};
+					return;
+				}
 				errorMessage =
 					data?.message || `提交失败（HTTP ${response.status}），请稍后再试`;
 				return;
@@ -157,12 +254,7 @@
 	<span>{buttonLabel}</span>
 </button>
 
-<dialog
-	bind:this={dialog}
-	class="friend-apply-dialog"
-	onmousedown={handleDialogMouseDown}
-	onmouseup={handleDialogMouseUp}
->
+<dialog bind:this={dialog} class="friend-apply-dialog">
 	<div class="friend-apply-panel p-5 md:p-6">
 		<div class="flex items-start justify-between gap-4">
 			<h3 class="text-lg font-bold text-90 pt-1">{title}</h3>
@@ -253,13 +345,25 @@
 						maxlength="200"
 						placeholder="https://example.com/"
 						class={inputClass}
+						oninput={onUrlInput}
+						onblur={() => checkLinks(["url"])}
 					/>
+					{#if fieldChecks.url?.message}
+						<p
+							class={"text-xs leading-5 " +
+								(fieldChecks.url.level === "error"
+									? "text-red-500 dark:text-red-400"
+									: "text-50")}
+						>
+							{fieldChecks.url.message}
+						</p>
+					{/if}
 				</label>
 
 				<label class="flex flex-col gap-1.5">
 					<span class="text-75 text-xs font-medium">
 						头像
-						<span class="text-30">（可选，建议填原图直链）</span>
+						<span class="text-30">（可选，留空会自动从你站点抓一个）</span>
 					</span>
 					<input
 						bind:value={avatar}
@@ -267,7 +371,19 @@
 						maxlength="300"
 						placeholder="https://example.com/avatar.png"
 						class={inputClass}
+						oninput={() => clearCheck("avatar")}
+						onblur={() => checkLinks(["avatar"])}
 					/>
+					{#if fieldChecks.avatar?.message}
+						<p
+							class={"text-xs leading-5 " +
+								(fieldChecks.avatar.level === "error"
+									? "text-red-500 dark:text-red-400"
+									: "text-50")}
+						>
+							{fieldChecks.avatar.message}
+						</p>
+					{/if}
 				</label>
 
 				<label class="flex flex-col gap-1.5">
@@ -281,7 +397,19 @@
 						maxlength="200"
 						placeholder="https://example.com/friends/"
 						class={inputClass}
+						oninput={() => clearCheck("backlink")}
+						onblur={() => checkLinks(["backlink"])}
 					/>
+					{#if fieldChecks.backlink?.message}
+						<p
+							class={"text-xs leading-5 " +
+								(fieldChecks.backlink.level === "error"
+									? "text-red-500 dark:text-red-400"
+									: "text-50")}
+						>
+							{fieldChecks.backlink.message}
+						</p>
+					{/if}
 				</label>
 
 				<label class="flex flex-col gap-1.5">
@@ -324,9 +452,9 @@
 						disabled={!canSubmit}
 						class="btn-regular rounded-lg h-10 px-4 gap-2 text-sm font-bold active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
 					>
-						{#if submitting}
+						{#if submitting || checkingLinks}
 							<Icon icon="fa6-solid:spinner" class="text-[1.125rem] animate-spin"></Icon>
-							<span>提交中…</span>
+							<span>{checkingLinks && !submitting ? "检测链接中…" : "提交中…"}</span>
 						{:else}
 							<Icon icon="fa6-solid:paper-plane" class="text-[1.125rem]"></Icon>
 							<span>提交申请</span>

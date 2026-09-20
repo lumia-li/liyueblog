@@ -10,6 +10,8 @@
  * 硬性拦截会误杀正常申请，所以这里一律「记录结论 + 前端温和提示」。
  */
 
+import { promises as dns } from "node:dns";
+
 /** 用浏览器 UA 请求，减少被当爬虫直接 403 的概率 */
 const BROWSER_UA =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -27,6 +29,8 @@ export type UrlCheck = {
 	reason?: string;
 	/** 技术细节（错误码 + 原始信息），便于排查 */
 	error?: string;
+	/** 响应的 Content-Type（判断"是不是图片"用，例如抓头像时排除软 404 的 HTML） */
+	contentType?: string;
 	/**
 	 * true = 这类失败「说不准」：可能是防爬（403）、限流、超时、
 	 * 对方服务器抽风。这种不要拿去吓唬申请人，只记给站长看。
@@ -71,7 +75,6 @@ function describeStatus(status: number): FailureInfo {
 }
 
 /**
- * 网络层错误 → 人话。
  *
  * 注意：undici（Node / Vercel 上的 fetch）会把真正的原因塞进 `error.cause`，
  * 外层只有一句没用的 "fetch failed"——必须往下挖一层才看得出是域名没解析、
@@ -128,7 +131,7 @@ async function readTextLimited(response: Response, maxBytes: number): Promise<st
 	let received = 0;
 	let text = "";
 	try {
-		for (;;) {
+		for (; ;) {
 			const { done, value } = await reader.read();
 			if (done) break;
 			received += value.byteLength;
@@ -139,9 +142,97 @@ async function readTextLimited(response: Response, maxBytes: number): Promise<st
 	} catch {
 		// 读一半断了也拿去匹配：友链链接通常在前半页
 	} finally {
-		await reader.cancel().catch(() => {});
+		await reader.cancel().catch(() => { });
 	}
 	return text;
+}
+
+// ── SSRF 防护 ──────────────────────────────────────────────────
+// 这个检测是「以服务器身份访问用户填的任意地址」，必须挡住内网/本机，
+// 否则别人可以拿它探测内网服务或云元数据接口（169.254.169.254）。
+
+const PRIVATE_V4 = [
+	/^0\./,
+	/^10\./,
+	/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+	/^127\./,
+	/^169\.254\./,
+	/^172\.(1[6-9]|2\d|3[01])\./,
+	/^192\.(0\.0|168)\./,
+	/^198\.(18|19)\./,
+	/^255\.255\.255\.255$/,
+];
+
+function isPrivateAddress(address: string): boolean {
+	const ip = address.trim().toLowerCase();
+	if (ip.includes(":")) {
+		if (ip === "::1" || ip === "::") return true;
+		if (/^f[cd]/.test(ip)) return true; // 唯一本地地址 fc00::/7
+		if (/^fe[89ab]/.test(ip)) return true; // 链路本地 fe80::/10
+		const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+		return mapped ? isPrivateAddress(mapped[1]) : false;
+	}
+	return PRIVATE_V4.some((pattern) => pattern.test(ip));
+}
+
+function isBlockedHostname(hostname: string): boolean {
+	const host = hostname.toLowerCase();
+	return (
+		host === "localhost" ||
+		host.endsWith(".localhost") ||
+		host.endsWith(".local") ||
+		host.endsWith(".internal") ||
+		host.endsWith(".home.arpa")
+	);
+}
+
+type GuardResult = { ok: true; url: URL } | { ok: false; info: FailureInfo };
+
+/** 只允许公网 http(s) 地址；本地开发跳过内网限制，方便用 localhost 调试 */
+async function guardUrl(rawUrl: string): Promise<GuardResult> {
+	let parsed: URL;
+	try {
+		parsed = new URL(rawUrl);
+	} catch {
+		return {
+			ok: false,
+			info: { reason: "地址格式不正确", detail: "invalid url", ambiguous: false },
+		};
+	}
+	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+		return {
+			ok: false,
+			info: { reason: "只支持 http / https 地址", detail: parsed.protocol, ambiguous: false },
+		};
+	}
+	if (import.meta.env.DEV) return { ok: true, url: parsed };
+
+	if (isBlockedHostname(parsed.hostname)) {
+		return {
+			ok: false,
+			info: {
+				reason: "这个地址指向本机或内网，已拒绝检测",
+				detail: `blocked host ${parsed.hostname}`,
+				ambiguous: false,
+			},
+		};
+	}
+	try {
+		const { address } = await dns.lookup(parsed.hostname);
+		if (isPrivateAddress(address)) {
+			return {
+				ok: false,
+				info: {
+					reason: "这个地址指向内网，已拒绝检测",
+					detail: `blocked ip ${address}`,
+					ambiguous: false,
+				},
+			};
+		}
+	} catch {
+		// 解析不了就交给后面的 fetch 去报「域名解析失败」，这里不拦
+	}
+	return { ok: true, url: parsed };
 }
 
 /**
@@ -157,6 +248,12 @@ export async function fetchUrl(
 ): Promise<UrlCheck & { body?: string }> {
 	const { timeoutMs = 8000, wantBody = false } = options;
 
+	// 先过安全闸：挡掉内网/本机地址
+	const guard = await guardUrl(url);
+	if (!guard.ok) {
+		return { ok: false, reason: guard.info.reason, error: guard.info.detail, ambiguous: false };
+	}
+
 	try {
 		const response = await fetch(url, {
 			headers: requestHeaders(),
@@ -170,6 +267,7 @@ export async function fetchUrl(
 			ok,
 			status: response.status,
 			finalUrl: response.url || url,
+			contentType: (response.headers.get("content-type") || "").toLowerCase(),
 			...(info ? { reason: info.reason, error: info.detail, ambiguous: info.ambiguous } : {}),
 		};
 
@@ -177,7 +275,7 @@ export async function fetchUrl(
 			result.body = await readTextLimited(response, MAX_HTML_BYTES);
 		} else {
 			// 不需要正文就别把内容拉回来
-			await response.body?.cancel().catch(() => {});
+			await response.body?.cancel().catch(() => { });
 		}
 
 		return result;
@@ -190,6 +288,110 @@ export async function fetchUrl(
 			ambiguous: failure.ambiguous,
 		};
 	}
+}
+
+// ── 头像自动抓取 ───────────────────────────────────────────────
+// 申请人没填头像时，从他站点首页里找一个能当头像的图。
+// 优先「方形大图」：apple-touch-icon → 大尺寸 icon → og:image / twitter:image → 普通 icon，
+// 最后兜底站点根目录的 favicon.ico。
+
+export type AvatarCandidate = { url: string; source: string };
+
+/** 从首页 HTML 里收集候选头像，按适合程度排序（相对地址按页面地址解析） */
+export function collectAvatarCandidates(html: string, pageUrl: string): AvatarCandidate[] {
+	if (!html) return [];
+
+	const resolve = (raw: string): string => {
+		const value = raw.trim();
+		if (!value || value.startsWith("data:")) return "";
+		try {
+			const url = new URL(value, pageUrl);
+			return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+		} catch {
+			return "";
+		}
+	};
+
+	const apple: AvatarCandidate[] = [];
+	const bigIcons: AvatarCandidate[] = [];
+	const smallIcons: AvatarCandidate[] = [];
+	const social: AvatarCandidate[] = [];
+
+	for (const tag of html.match(/<link\b[^>]*>/gi) || []) {
+		const rel = (tag.match(/rel\s*=\s*["']?([^"'>]+)/i)?.[1] || "").toLowerCase();
+		const href =
+			tag.match(/href\s*=\s*["']([^"']+)["']/i)?.[1] ??
+			tag.match(/href\s*=\s*([^\s"'>]+)/i)?.[1];
+		const url = href ? resolve(href) : "";
+		if (!url) continue;
+
+		if (rel.includes("apple-touch-icon")) {
+			apple.push({ url, source: "apple-touch-icon" });
+			continue;
+		}
+		if (/\bicon\b/.test(rel)) {
+			const size = Number(tag.match(/sizes\s*=\s*["']?(\d+)/i)?.[1] || 0);
+			const candidate = { url, source: size ? `icon ${size}` : "icon" };
+			(size >= 96 ? bigIcons : smallIcons).push(candidate);
+		}
+	}
+
+	for (const tag of html.match(/<meta\b[^>]*>/gi) || []) {
+		const key = (tag.match(/(?:property|name)\s*=\s*["']([^"']+)["']/i)?.[1] || "").toLowerCase();
+		if (key !== "og:image" && key !== "twitter:image") continue;
+		const content = tag.match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
+		const url = content ? resolve(content) : "";
+		if (url) social.push({ url, source: key });
+	}
+
+	const seen = new Set<string>();
+	const result: AvatarCandidate[] = [];
+	for (const candidate of [...apple, ...bigIcons, ...social, ...smallIcons]) {
+		if (seen.has(candidate.url)) continue;
+		seen.add(candidate.url);
+		result.push(candidate);
+	}
+	return result;
+}
+
+/** 兜底候选：站点根目录的 favicon.ico */
+export function faviconCandidate(pageUrl: string): AvatarCandidate | null {
+	try {
+		return { url: new URL("/favicon.ico", pageUrl).toString(), source: "favicon.ico" };
+	} catch {
+		return null;
+	}
+}
+
+/** 一个响应看起来是不是图片（排除返回 HTML 的软 404） */
+function looksLikeImage(contentType?: string): boolean {
+	if (!contentType) return true; // 对方没给 Content-Type，先当图片处理
+	return (
+		contentType.startsWith("image/") ||
+		contentType.startsWith("application/octet-stream")
+	);
+}
+
+/**
+ * 并行验证前几个候选图，按优先级返回第一个「确实能打开且是图片」的。
+ * 申请表单里用它，避免把一个打不开的图标自动填进去。
+ */
+export async function pickReachableAvatar(
+	candidates: AvatarCandidate[],
+	timeoutMs = 5000,
+): Promise<AvatarCandidate | null> {
+	const top = candidates.slice(0, 3);
+	if (top.length === 0) return null;
+
+	const results = await Promise.all(
+		top.map((candidate) =>
+			fetchUrl(candidate.url, { timeoutMs })
+				.then((result) => result.ok && looksLikeImage(result.contentType))
+				.catch(() => false),
+		),
+	);
+	const index = results.findIndex(Boolean);
+	return index >= 0 ? top[index] : null;
 }
 
 export type BacklinkResult = {

@@ -6,7 +6,7 @@ import {
 	slugFromUrl,
 	writeFriendFile,
 } from "@utils/friend-data";
-import { fetchUrl, verifyBacklink } from "@utils/link-check";
+import { collectAvatarCandidates, faviconCandidate, fetchUrl, verifyBacklink } from "@utils/link-check";
 import type { APIRoute } from "astro";
 import { friendLinkConfig } from "../../data/friend-links";
 
@@ -21,8 +21,11 @@ import { friendLinkConfig } from "../../data/friend-links";
  *      如果该站点**已经通过过**，这次提交只写 applications/（标记 update），
  *      friends/ 里的旧记录保持不动，状态条会显示「信息更新审核中」。
  *
- * 提交时会顺手做三项检测（结果只写进文件供站长参考，不拦提交）：
- *      站点可达 / 头像可达 / 对方友链页有没有回链本站
+ * 提交时会做三项检测：站点可达 / 头像可达 / 对方友链页有没有回链本站。
+ *   · 「确定有问题」的（域名解析失败、404、连接被拒、证书异常、内网地址）
+ *     → 返回 400 并带上 field，不写任何文件；前端把原因显示在对应输入框下方
+ *   · 「说不准」的（403 防爬、超时、对方 5xx）→ 只记录，不拦提交
+ * 前端提交前会先调 /api/friend-link-check 做同样的检查，这里是服务端兜底。
  *
  * 需要的环境变量（Vercel → Project → Settings → Environment Variables）：
  *   FRIEND_DATA_REPO   数据仓库，格式 owner/repo，例如 lumia-li/friends-data
@@ -258,7 +261,8 @@ export const POST: APIRoute = async ({ request }) => {
 
 	// ── 三项检测并行跑（结果只作参考，不拦提交）──────────────────
 	const [siteCheck, avatarCheck, backlinkCheck] = await Promise.all([
-		fetchUrl(draft.url, { timeoutMs: TIMEOUT.site }),
+		// 没填头像时顺便把首页正文要回来，好从里面抓一个头像
+		fetchUrl(draft.url, { timeoutMs: TIMEOUT.site, wantBody: !draft.avatar }),
 		draft.avatar ? fetchUrl(draft.avatar, { timeoutMs: TIMEOUT.avatar }) : null,
 		draft.backlink
 			? fetchUrl(draft.backlink, { timeoutMs: TIMEOUT.backlink, wantBody: true })
@@ -281,23 +285,35 @@ export const POST: APIRoute = async ({ request }) => {
 		Boolean(hostOf(draft.backlink)) &&
 		hostOf(draft.backlink) !== hostOf(draft.url);
 
-	// 只有「确定有问题」的失败才提示申请人；403 / 超时 / 5xx 这类"说不准"的
-	// 只记进申请文件给站长看，避免把正常申请吓退（详见 utils/link-check.ts）
+	// 「确定有问题」的检测结果直接拦下：不写文件，把原因和字段一起返回，
+	// 前端会把它显示在对应的输入框下方（详见 utils/link-check.ts 的判定规则）
+	const blocking = !siteCheck.ok && !siteCheck.ambiguous
+		? {
+				field: "url",
+				message: `站点未检测通过：${siteCheck.reason || siteCheck.error || "未知原因"}`,
+			}
+		: avatarCheck && !avatarCheck.ok && !avatarCheck.ambiguous
+			? {
+					field: "avatar",
+					message: `头像未检测通过：${avatarCheck.reason || avatarCheck.error || "未知原因"}`,
+				}
+			: backlinkCheck && !backlinkCheck.ok && !backlinkCheck.ambiguous
+				? {
+						field: "backlink",
+						message: `友链页未检测通过：${backlinkCheck.reason || backlinkCheck.error || "未知原因"}`,
+					}
+				: null;
+
+	if (blocking) {
+		return json(400, { ok: false, field: blocking.field, message: blocking.message });
+	}
+
+	// 下面这些只是提示，不影响提交；站点/头像的检测结果已经在输入框下方实时显示过，
+	// 这里不重复，只留友链页相关的说明
+	// 双向链接正常（verified）时不给任何提示词，只有需要申请人注意的情况才提示
 	const warnings: string[] = [];
-	if (!siteCheck.ok && !siteCheck.ambiguous) {
-		warnings.push(
-			`你的站点没检测通过：${siteCheck.reason || siteCheck.error || "未知原因"}。确认地址没写错就行，审核时我也会再看一遍。`,
-		);
-	}
-	if (avatarCheck && !avatarCheck.ok && !avatarCheck.ambiguous) {
-		warnings.push(
-			`你的头像地址没检测通过：${avatarCheck.reason || avatarCheck.error || "未知原因"}。建议换一个能直接打开的图片直链，不然友链卡片上会显示默认图标。`,
-		);
-	}
-	if (backlinkResult && draft.backlink) {
-		if (backlinkResult.verified) {
-			warnings.push("已在你填的友链页里找到指向本站的链接，双向友链确认 ✓");
-		} else if (backlinkCheck && !backlinkCheck.ok) {
+	if (backlinkResult && draft.backlink && !backlinkResult.verified) {
+		if (backlinkCheck && !backlinkCheck.ok) {
 			warnings.push(
 				`你的友链页这次没能打开（${backlinkCheck.reason || backlinkResult.reason || "未知原因"}），所以没法自动确认双向链接，审核时我会手动看一眼。`,
 			);
@@ -311,6 +327,23 @@ export const POST: APIRoute = async ({ request }) => {
 		warnings.push(
 			"你填的友链页域名和站点域名不一致，确认一下是不是填成了别人的站？",
 		);
+	}
+
+	// 头像没填 → 从他站点首页抓一个。正常流程里前端已经填好了，
+	// 这里是兜底（防止绕过前端直接调接口）。为了不拖长函数时间，
+	// 这里不再逐个验证可达性，优先用非 favicon 的候选。
+	let avatarValue = draft.avatar;
+	let avatarAuto = false;
+	if (!avatarValue && siteCheck.body) {
+		const pageUrl = siteCheck.finalUrl || draft.url;
+		const candidates = collectAvatarCandidates(siteCheck.body, pageUrl);
+		const fallback = faviconCandidate(pageUrl);
+		if (fallback) candidates.push(fallback);
+		const picked = candidates.find((item) => item.source !== "favicon.ico") ?? candidates[0] ?? null;
+		if (picked) {
+			avatarValue = picked.url;
+			avatarAuto = true;
+		}
 	}
 
 	const checks = {
@@ -339,7 +372,8 @@ export const POST: APIRoute = async ({ request }) => {
 			{
 				name: draft.name,
 				description: draft.description,
-				avatar: draft.avatar,
+				avatar: avatarValue,
+				...(avatarAuto ? { avatarAuto: true } : {}),
 				url: draft.url,
 				...(draft.backlink ? { backlink: draft.backlink } : {}),
 				...(draft.contact ? { contact: draft.contact } : {}),
