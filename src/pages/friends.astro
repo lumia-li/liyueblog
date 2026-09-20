@@ -12,12 +12,21 @@ import { friendLinkConfig } from "../data/friend-links";
 const { title, description, intro, self, apply, friends } = friendLinkConfig;
 const showApply = Boolean(apply?.enable);
 
-// 已通过的友链 = 本地配置 + 数据仓库 data/friends/*.json（审核通过只需把文件移过去）
+// 已通过的友链 = 本地配置 + 数据仓库，两种审核方式都认：
+//   1) 申请文件里的 status 改成 "approved"（最省事：改一个词就行）
+//   2) 把文件从 data/applications/ 移到 data/friends/（老办法，依然兼容）
 // 拉取失败时静默退回本地列表，绝不影响构建
 let remoteFriends: { name: string; avatar: string; description: string; url: string }[] = [];
 try {
-	const entries = await listFriendDir("friends");
-	remoteFriends = entries.map((entry) => ({
+	const [movedToFriends, applications] = await Promise.all([
+		listFriendDir("friends"),
+		listFriendDir("applications"),
+	]);
+	const approvedByStatus = applications.filter(
+		(entry) => String(entry.status || "").toLowerCase() === "approved",
+	);
+	// status 被改成 approved 的排前面：它通常比 friends/ 里的旧记录更新
+	remoteFriends = [...approvedByStatus, ...movedToFriends].map((entry) => ({
 		name: entry.name,
 		avatar: entry.avatar || "",
 		description: entry.description || "",
@@ -28,11 +37,14 @@ try {
 }
 
 const normalizeUrl = (value: string) => value.trim().replace(/\/+$/, "").toLowerCase();
-const localUrls = new Set(friends.map((friend) => normalizeUrl(friend.url)));
-const allFriends = [
-	...friends,
-	...remoteFriends.filter((friend) => !localUrls.has(normalizeUrl(friend.url))),
-];
+const seenUrls = new Set(friends.map((friend) => normalizeUrl(friend.url)));
+const allFriends = [...friends];
+for (const candidate of remoteFriends) {
+	const key = normalizeUrl(candidate.url);
+	if (!key || seenUrls.has(key)) continue;
+	seenUrls.add(key);
+	allFriends.push(candidate);
+}
 ---
 
 <MainGridLayout title={title} description={description}>

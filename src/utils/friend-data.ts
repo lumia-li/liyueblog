@@ -2,9 +2,13 @@
  * 友链数据仓库（每条记录一个 JSON 文件，参考 afoim/af_friends-data 的做法）。
  *
  * 目录约定：
- *   data/applications/<slug>.json   待审核
+ *   data/applications/<slug>.json   申请文件（status 决定结果）
  *   data/friends/<slug>.json        已通过（友链页会读它来渲染列表）
  *   data/rejected/<slug>.json       未通过
+ *
+ * 审核有两种方式，效果一样：
+ *   1) 把申请文件里的 status 改成 "approved" / "rejected"（只改一个词，最省事）
+ *   2) 把文件从 applications/ 移到 friends/ 或 rejected/（老办法）
  *
  * slug = 站点域名（如 example.com），同一站点重复提交会覆盖同一个文件，
  * 所以不会因为反复提交而堆出一堆垃圾文件。

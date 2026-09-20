@@ -6,6 +6,7 @@ import {
 	slugFromUrl,
 	writeFriendFile,
 } from "@utils/friend-data";
+import { checkFriendDescription, checkFriendName } from "@utils/friend-text";
 import { collectAvatarCandidates, faviconCandidate, fetchUrl, verifyBacklink } from "@utils/link-check";
 import type { APIRoute } from "astro";
 import { friendLinkConfig } from "../../data/friend-links";
@@ -16,8 +17,9 @@ import { friendLinkConfig } from "../../data/friend-links";
  * 流程：友链页弹窗表单 → 这里做校验和自动检测 → 往「友链数据仓库」写一个 JSON 文件：
  *      data/applications/<站点域名>.json
  *
- * 审核：把该文件移到 data/friends/ 就是通过（移到 data/rejected/ 就是未通过），
- *      申请人凭提交时拿到的查询凭证在友链页看到结果。
+ * 审核：申请文件落在 applications/（status: "pending"），你在 GitHub 上把
+ *      status 改成 "approved" / "rejected" 即可，也可以把文件移到
+ *      data/friends/ / data/rejected/。申请人凭提交时拿到的查询凭证在友链页看到结果。
  *      如果该站点**已经通过过**，这次提交只写 applications/（标记 update），
  *      friends/ 里的旧记录保持不动，状态条会显示「信息更新审核中」。
  *
@@ -144,7 +146,8 @@ function hostOf(value: string): string {
 
 type ParseResult =
 	| { ok: true; draft: ApplicationDraft; isSpam: boolean }
-	| { ok: false; message: string };
+	// field 指回具体输入框，前端会把提示显示在那个框下面
+	| { ok: false; message: string; field?: string };
 
 function parseApplication(raw: unknown): ParseResult {
 	if (!raw || typeof raw !== "object") {
@@ -175,22 +178,39 @@ function parseApplication(raw: unknown): ParseResult {
 		description: readText(body.description, LIMITS.description),
 	};
 
-	if (!draft.name) return { ok: false, message: "请填写站点名称" };
+	// 名称 / 简介的文本检测：和前端共用 utils/friend-text.ts，规则完全一致
+	const nameCheck = checkFriendName(draft.name);
+	if (!nameCheck.ok) return { ok: false, field: "name", message: nameCheck.message };
 	if (!draft.url || !isHttpUrl(draft.url)) {
-		return { ok: false, message: "站点地址要填完整地址，以 http:// 或 https:// 开头" };
+		return {
+			ok: false,
+			field: "url",
+			message: "站点地址要填完整地址，以 http:// 或 https:// 开头",
+		};
 	}
 	if (draft.avatar && !isHttpUrl(draft.avatar)) {
-		return { ok: false, message: "头像地址要填完整地址，以 http:// 或 https:// 开头" };
+		return {
+			ok: false,
+			field: "avatar",
+			message: "头像地址要填完整地址，以 http:// 或 https:// 开头",
+		};
 	}
 	if (draft.backlink && !isHttpUrl(draft.backlink)) {
-		return { ok: false, message: "友链页地址要填完整地址，以 http:// 或 https:// 开头" };
+		return {
+			ok: false,
+			field: "backlink",
+			message: "友链页地址要填完整地址，以 http:// 或 https:// 开头",
+		};
 	}
-	if (!draft.description) return { ok: false, message: "请填写一句话简介" };
+	const descriptionCheck = checkFriendDescription(draft.description);
+	if (!descriptionCheck.ok) {
+		return { ok: false, field: "description", message: descriptionCheck.message };
+	}
 
 	// 别把自己站提交给自己
 	const siteHost = hostOf(getSiteUrl());
 	if (siteHost && hostOf(draft.url) === siteHost) {
-		return { ok: false, message: "这个站点地址就是本站呀，不用申请友链～" };
+		return { ok: false, field: "url", message: "这个站点地址就是本站呀，不用申请友链～" };
 	}
 
 	return { ok: true, draft, isSpam: false };
@@ -221,7 +241,11 @@ export const POST: APIRoute = async ({ request }) => {
 
 	const parsed = parseApplication(raw);
 	if (!parsed.ok) {
-		return json(400, { ok: false, message: parsed.message });
+		return json(400, {
+			ok: false,
+			message: parsed.message,
+			...(parsed.field ? { field: parsed.field } : {}),
+		});
 	}
 	if (parsed.isSpam) {
 		// 对机器人返回成功，避免它反复试探

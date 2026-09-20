@@ -5,16 +5,14 @@ import type { APIRoute } from "astro";
 /**
  * 友链申请状态查询（GET /api/friend-apply-status?token=域名.签名）
  *
- * 判定规则（看数据仓库里的文件位置）：
- *   friends/ + applications/ 都有 → update    已通过，本次是信息更新，待审核
- *   data/friends/<域名>.json      → approved  已通过
- *   data/applications/<域名>.json → pending   审核中（重新申请也走这里）
- *   data/rejected/<域名>.json     → rejected  未通过
- *   三处都没有                     → unknown   查不到记录
- *
- * 顺序很关键：applications 优先于 rejected，这样「被拒后重新申请」会立刻
- * 回到审核中，不会一直卡在「未通过」；friends 优先于 applications，
- * 只有两者同时存在才代表这是对已通过友链的信息更新。
+ * 判定规则（同时支持两种审核方式）：
+ *   applications 里 status 是 approved → approved  已通过（站长直接改了 status）
+ *   applications 里 status 是 rejected → rejected  未通过
+ *   friends/ + applications/ 都有      → update    已通过，本次是信息更新，待审核
+ *   data/friends/<域名>.json           → approved  已通过（站长把文件移过来了）
+ *   data/rejected/<域名>.json          → rejected  未通过（老办法）
+ *   data/applications/<域名>.json      → pending   审核中（重新申请也走这里）
+ *   都没有                              → unknown   查不到记录
  *
  * 只返回状态，不返回任何申请内容，所以凭证泄露也只泄露一个进度。
  *
@@ -114,15 +112,24 @@ export const GET: APIRoute = async ({ request }) => {
 			readFriendFile("rejected", slug),
 		]);
 
-		if (friend.exists) {
-			// 已通过之后又提交了一次 → 信息更新待审核
-			return respond({
-				ok: true,
-				state: application.exists ? "update" : "approved",
-			});
-		}
+		// 站长直接在申请文件里把 status 改成 approved / rejected（最省事的审核方式）
+		const applicationStatus = String(application.entry?.status || "").toLowerCase();
+
 		if (application.exists) {
+			if (applicationStatus === "approved") {
+				return respond({ ok: true, state: "approved" });
+			}
+			if (applicationStatus === "rejected") {
+				return respond({ ok: true, state: "rejected" });
+			}
+			// 已通过之后又提交了一次 → 信息更新待审核
+			if (friend.exists) {
+				return respond({ ok: true, state: "update" });
+			}
 			return respond({ ok: true, state: "pending" });
+		}
+		if (friend.exists) {
+			return respond({ ok: true, state: "approved" });
 		}
 		if (rejected.exists) {
 			return respond({ ok: true, state: "rejected" });

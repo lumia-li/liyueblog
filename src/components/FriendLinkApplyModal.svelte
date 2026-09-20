@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Icon from "@iconify/svelte";
 	import { onMount } from "svelte";
+	import { checkFriendDescription, checkFriendName } from "../utils/friend-text";
 
 	export let buttonLabel = "填写申请表单";
 	export let title = "申请友链";
@@ -122,9 +123,30 @@
 		}
 	}
 
+	// ── 名称 / 简介的本地检测（规则与后端共用 utils/friend-text.ts）──────
+	type TextField = "name" | "description";
+	let textChecks: Partial<Record<TextField, string>> = {};
+
+	function validateText(field: TextField) {
+		const result = field === "name" ? checkFriendName(siteName) : checkFriendDescription(intro);
+		const next = { ...textChecks };
+		if (result.ok) delete next[field];
+		else next[field] = result.message;
+		textChecks = next;
+	}
+
+	function clearTextCheck(field: TextField) {
+		if (!textChecks[field]) return;
+		const next = { ...textChecks };
+		delete next[field];
+		textChecks = next;
+	}
+
 	/** 有「确定有问题」的字段时不许提交（note 只是提示，不拦） */
 	const hasBlockingError = (checks: Partial<Record<CheckField, FieldCheck>> = fieldChecks) =>
 		Object.values(checks).some((check) => check?.level === "error");
+
+	$: hasTextError = Object.keys(textChecks).length > 0;
 
 	$: canSubmit =
 		!submitting &&
@@ -132,6 +154,7 @@
 		siteName.trim() !== "" &&
 		siteUrl.trim() !== "" &&
 		intro.trim() !== "" &&
+		!hasTextError &&
 		!hasBlockingError(fieldChecks);
 
 	const inputClass =
@@ -145,6 +168,7 @@
 		warnings = [];
 		submittedState = "";
 		fieldChecks = {};
+		textChecks = {};
 		// 用原生 <dialog>.showModal()：渲染在 top layer，
 		// 不受页面里 will-change: transform 容器的影响
 		dialog?.showModal();
@@ -161,7 +185,11 @@
 		submitting = true;
 		errorMessage = "";
 		try {
-			// ① 先做链接体检：有「确定有问题」的字段就停在这一步，不触发申请
+			// ① 先查名称 / 简介的文本，再查链接：任一有问题就停在这一步，不触发申请
+			validateText("name");
+			validateText("description");
+			if (Object.keys(textChecks).length > 0) return;
+
 			await checkLinks();
 			if (hasBlockingError()) return;
 
@@ -188,7 +216,15 @@
 			} | null;
 
 			if (!response.ok || !data?.ok) {
-				// 服务端把「检测不通过」的原因挂在字段上 → 显示到对应输入框下方
+				// 名称 / 简介没过（服务端兜底）→ 显示到对应输入框下方
+				if (data?.field === "name" || data?.field === "description") {
+					textChecks = {
+						...textChecks,
+						[data.field]: data.message || "内容没检测通过",
+					};
+					return;
+				}
+				// 链接类的问题同样挂回对应输入框
 				if (data?.field) {
 					fieldChecks = {
 						...fieldChecks,
@@ -323,7 +359,12 @@
 						maxlength="40"
 						placeholder="博客名称"
 						class={inputClass}
+						oninput={() => clearTextCheck("name")}
+						onblur={() => validateText("name")}
 					/>
+					{#if textChecks.name}
+						<p class="text-xs leading-5 text-red-500 dark:text-red-400">{textChecks.name}</p>
+					{/if}
 				</label>
 
 				<label class="flex flex-col gap-1.5">
@@ -334,7 +375,14 @@
 						maxlength="80"
 						placeholder="博客简介"
 						class={inputClass}
+						oninput={() => clearTextCheck("description")}
+						onblur={() => validateText("description")}
 					/>
+					{#if textChecks.description}
+						<p class="text-xs leading-5 text-red-500 dark:text-red-400">
+							{textChecks.description}
+						</p>
+					{/if}
 				</label>
 
 				<label class="flex flex-col gap-1.5">
