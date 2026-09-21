@@ -32,7 +32,7 @@ export const friendLinkConfig: FriendLinkConfig = {
             buttonLabel: "填写申请表单",
             title: "申请友链",
             description:
-                "填好下面的信息提交即可。链接填完会自动检测：站点 / 头像打不开会直接在下面标出来，改好才能提交；信息之后有变动也可以再提交一次，会作为「信息更新」处理。",
+                "填好点提交就行，链接会自动检测能否打开（打不开会标出来，改好再提交）。信息有变动时再提交一次即可。",
         },
         contacts: [
             {
