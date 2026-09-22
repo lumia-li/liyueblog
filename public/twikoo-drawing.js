@@ -125,7 +125,10 @@
     if (submitRoot.hasAttribute(INIT_ATTR)) return;
     submitRoot.setAttribute(INIT_ATTR, 'true');
 
-    const textarea = submitRoot.querySelector('.el-textarea__inner');
+    // Twikoo 2.x 移除了 Element UI，textarea 类名由 el-textarea__inner 变为 tk-textarea__inner
+    const textarea =
+      submitRoot.querySelector('.tk-textarea__inner') ||
+      submitRoot.querySelector('.el-textarea__inner');
     const sendBtn = submitRoot.querySelector('.tk-send');
     const actionsRow = submitRoot.querySelector('.tk-row.actions');
     if (!textarea || !sendBtn || !actionsRow) return;
@@ -135,7 +138,7 @@
 
     const toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
-    toggleBtn.className = 'el-button el-button--default el-button--small tk-drawing-toggle';
+    toggleBtn.className = 'tk-button tk-button--small tk-drawing-toggle';
     toggleBtn.title = '画板';
     toggleBtn.setAttribute('aria-label', '画板');
     toggleBtn.innerHTML =

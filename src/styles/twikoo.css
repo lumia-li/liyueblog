@@ -174,7 +174,7 @@ html.dark {
   min-height: 2.8rem;
 }
 
-.tk-meta-input .el-input-group__prepend {
+.tk-meta-input .tk-input-group__prepend {
   min-height: inherit;
   min-width: 5.3rem;
   border-radius: 0.85rem 0 0 0.85rem !important;

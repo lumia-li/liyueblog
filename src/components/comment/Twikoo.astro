@@ -47,8 +47,8 @@ const config = {
           console.log('评论加载完成');
           loadDrawingScript();
         },
-        onCommentPosted: function() {
-          console.log('评论发送完成');
+        onSubmit: function(comment) {
+          console.log('评论提交中');
         }
       });
     }
@@ -191,13 +191,10 @@ const config = {
     position: relative;
   }
 
-  /* 确保评论区的弹窗和下拉菜单正确显示 */
+  /* 确保评论区正确显示 */
   .twikoo {
     z-index: 10 !important;
   }
 
-  .twikoo .el-dropdown-menu,
-  .twikoo .el-dialog {
-    z-index: 1000 !important;
-  }
+  /* Twikoo 2.x 已移除 Element UI，表情面板等浮层由组件自带 z-index 管理 */
 </style>
