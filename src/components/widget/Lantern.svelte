@@ -3,37 +3,131 @@ import { onMount } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { fade } from "svelte/transition";
 
+type FestivalLantern = {
+	id: number;
+	left: string;
+	duration: string;
+	delay: string;
+};
+
+type FestivalMode = "mid-autumn" | "new-year" | "none";
+
+/* ==================================================================
+ * 节日开关（预备开关）
+ * ------------------------------------------------------------------
+ * 同时只生效一个：先看中秋，再看新年；两个都关时按钮回到原来的
+ * 「躲开点击 + 连点 5 次消失」彩蛋。
+ *
+ * 开启节日后，按钮统一走这套逻辑：
+ *   「🏮 灯笼已关」纸片 → 悬停撕纸 → 露出节日按钮 → 点击触发节日效果 + 弹文字
+ *   → 长按倒放撕纸、把纸片贴回去
+ *     中秋 = 露出「🌕 中秋快乐」，点击放飞中秋灯笼雨
+ *     新年 = 露出「🏮 新年快乐」，点击挂出顶部 4 个新年灯笼
+ *
+ * 节日过去后把对应开关改成 false 即可屏蔽（其余代码不用动，方便下次再用）。
+ * ================================================================== */
+const MID_AUTUMN_ENABLED = true; // 中秋（现在是中秋，开着）
+const NEW_YEAR_ENABLED = false; // 春节（春节前改成 true 即可启用）
+
+function resolveFestivalMode(): FestivalMode {
+	if (MID_AUTUMN_ENABLED) return "mid-autumn";
+	if (NEW_YEAR_ENABLED) return "new-year";
+	return "none";
+}
+
+const FESTIVAL_MODE: FestivalMode = resolveFestivalMode();
+const IS_FESTIVAL_MODE = FESTIVAL_MODE !== "none";
+/* ================================================================== */
+
+// 旧版本把灯笼/按钮状态持久化进了 localStorage，现在只用于清理，不再读写
+const LEGACY_LANTERN_ENABLED_KEY = "lanternEnabled";
+const LEGACY_LANTERN_CONTROL_HIDDEN_KEY = "lanternControlHidden";
+const LEGACY_LANTERN_DODGE_ATTEMPTS_KEY = "lanternDodgeAttempts";
+const LEGACY_LANTERN_POSITION_KEYS = [
+	"lanternPositionV2_desktop",
+	"lanternPositionV2_mobile",
+];
+
+/* ---------------- 中秋模式参数 ---------------- */
+// 撕纸动画时长（需与 CSS 中的 animation 时长保持一致）
+const TEAR_DURATION_MS = 640;
+// 长按多久算“长按”（长按 = 把纸片贴回去）
+const LONG_PRESS_MS = 600;
+// 中秋灯笼素材（位于 public/images/）
+const FESTIVAL_LANTERN_SRC = "/images/mid-autumn-lantern.svg";
+const FESTIVAL_LANTERN_COUNT_DESKTOP = 24;
+const FESTIVAL_LANTERN_COUNT_MOBILE = 14;
+// 灯笼横向分布的总宽度（vw），留出左右边距
+const FESTIVAL_SLOT_SPAN_VW = 96;
+const FESTIVAL_BASE_GAP_MS = 180;
+const FESTIVAL_GAP_JITTER_MS = 120;
+const FESTIVAL_RISE_MIN_S = 9;
+const FESTIVAL_RISE_JITTER_S = 3;
+const FESTIVAL_CLEANUP_BUFFER_MS = 800;
+// 中秋模式的提示文字
+const MID_AUTUMN_MESSAGES = [
+	"🌕 中秋快乐，人月两团圆",
+	"但愿人长久，千里共婵娟",
+	"🥮 月饼管够，好运连连",
+	"🏮 灯笼升起来啦，愿望都算数",
+];
+// 新年模式的提示文字
+const NEW_YEAR_MESSAGES = [
+	"🎆 新年快乐，万事顺遂",
+	"🏮 灯笼挂好啦，好运一整年",
+	"🧧 恭喜发财，红包拿来",
+	"🎊 新的一年，越过越顺",
+];
+
+/* ---------------- 原彩蛋模式参数 ---------------- */
+const MIN_VISIBLE_PIXELS = 32;
+const CONTROL_MARGIN_PX = 2;
+const LEGACY_CONTROL_MARGIN_PX = 10;
+const POSITION_DEFAULT_EPSILON_PX = 2;
+const LANTERN_POSITION_KEY_PREFIX = "lanternPositionV2";
+const MAX_DODGE_ATTEMPTS = 5;
+const DODGE_TOAST_MESSAGES = [
+	"不要点啦",
+	"再戳我就躲远一点啦",
+	"你再点我就彻底消失啦",
+];
+
+/* ---------------- 通用参数 ---------------- */
+const TOAST_DURATION_MS = 1300;
+const TOAST_MIN_MARGIN_PX = 8;
+const TOAST_GAP_PX = 10;
+const TOAST_ESTIMATED_WIDTH = 220;
+const TOAST_ESTIMATED_HEIGHT = 42;
+
+// 新年灯笼（默认关闭，保持原样）
 let isEnabled = false;
+
+// 中秋模式状态
+let tearing = false;
+let torn = false;
+let restoring = false;
+let tearTimer: ReturnType<typeof setTimeout> | null = null;
+let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+let longPressTriggered = false;
+let festivalLanterns: FestivalLantern[] = [];
+let festivalTimer: ReturnType<typeof setTimeout> | null = null;
+let festivalMessageCursor = 0;
+let festivalLanternSeed = 0;
+
+// 原彩蛋模式状态
 let offsetX = 0;
 let offsetY = 0;
 let currentDeviceKey = "";
 let controlHidden = false;
 let dodgeAttempts = 0;
 let controlPositionReady = false;
+
+// 提示气泡（两种模式共用）
 let lanternToastVisible = false;
 let lanternToastMessage = "";
 let lanternToastTimeout: ReturnType<typeof setTimeout> | null = null;
 let lanternToastX = 14;
 let lanternToastY = 64;
-
-const MIN_VISIBLE_PIXELS = 32;
-const CONTROL_MARGIN_PX = 2;
-const LEGACY_CONTROL_MARGIN_PX = 10;
-const POSITION_DEFAULT_EPSILON_PX = 2;
-const LANTERN_ENABLED_KEY = "lanternEnabled";
-const LANTERN_CONTROL_HIDDEN_KEY = "lanternControlHidden";
-const LANTERN_DODGE_ATTEMPTS_KEY = "lanternDodgeAttempts";
-const LANTERN_POSITION_KEY_PREFIX = "lanternPositionV2";
-const MAX_DODGE_ATTEMPTS = 5;
-const TOAST_MIN_MARGIN_PX = 8;
-const TOAST_GAP_PX = 10;
-const TOAST_ESTIMATED_WIDTH = 220;
-const TOAST_ESTIMATED_HEIGHT = 42;
-const DODGE_TOAST_MESSAGES = [
-	"不要点啦",
-	"再戳我就躲远一点啦",
-	"你再点我就彻底消失啦",
-];
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, value));
@@ -58,18 +152,255 @@ function isMobileDevice() {
 	return typeof window !== "undefined" && window.innerWidth <= 768;
 }
 
-function getDeviceStorageKey() {
-	const deviceKey = isMobileDevice() ? "mobile" : "desktop";
-	currentDeviceKey = deviceKey;
-	return deviceKey;
+// 清理旧版本留下的键值，避免老访客被历史状态影响
+function cleanupLegacyState() {
+	if (!isLocalStorageAvailable()) return;
+	localStorage.removeItem(LEGACY_LANTERN_ENABLED_KEY);
+	localStorage.removeItem(LEGACY_LANTERN_CONTROL_HIDDEN_KEY);
+	localStorage.removeItem(LEGACY_LANTERN_DODGE_ATTEMPTS_KEY);
+	if (IS_FESTIVAL_MODE) {
+		// 节日模式下按钮固定在右下角，旧的位置记录不再需要
+		for (const key of LEGACY_LANTERN_POSITION_KEYS) {
+			localStorage.removeItem(key);
+		}
+	}
 }
+
+function getToggleRect() {
+	if (typeof document === "undefined") return null;
+	const toggle = document.querySelector(
+		".lantern-toggle-container",
+	) as HTMLElement | null;
+	return toggle?.getBoundingClientRect() ?? null;
+}
+
+function updateLanternToastPosition() {
+	if (typeof window === "undefined") return;
+	const toastEl = document.querySelector(
+		".lantern-toast",
+	) as HTMLElement | null;
+	const toastWidth = toastEl?.offsetWidth || TOAST_ESTIMATED_WIDTH;
+	const toastHeight = toastEl?.offsetHeight || TOAST_ESTIMATED_HEIGHT;
+	const minX = TOAST_MIN_MARGIN_PX;
+	const maxX = window.innerWidth - toastWidth - TOAST_MIN_MARGIN_PX;
+	const minY = TOAST_MIN_MARGIN_PX;
+	const maxY = window.innerHeight - toastHeight - TOAST_MIN_MARGIN_PX;
+
+	const rect = getToggleRect();
+	const anchorX = rect ? rect.left : maxX;
+	const anchorY = rect ? rect.top : window.innerHeight;
+
+	// 优先放在按钮上方；上方空间不够就放到按钮下方
+	let y = anchorY - toastHeight - TOAST_GAP_PX;
+	if (y < minY) {
+		y = (rect ? rect.bottom : anchorY) + TOAST_GAP_PX;
+	}
+
+	// 与按钮左对齐，超出视口再收缩
+	let x = anchorX;
+	if (x > maxX) {
+		x = maxX;
+	}
+	if (x < minX) {
+		x = minX;
+	}
+
+	lanternToastX = Math.round(clamp(x, minX, maxX));
+	lanternToastY = Math.round(clamp(y, minY, maxY));
+}
+
+function showLanternToast(message: string) {
+	lanternToastMessage = message;
+	lanternToastVisible = true;
+	updateLanternToastPosition();
+	requestAnimationFrame(() => {
+		updateLanternToastPosition();
+	});
+	if (lanternToastTimeout) {
+		clearTimeout(lanternToastTimeout);
+	}
+	lanternToastTimeout = setTimeout(() => {
+		lanternToastVisible = false;
+		lanternToastTimeout = null;
+	}, TOAST_DURATION_MS);
+}
+
+/* ==================================================================
+ * 中秋模式：撕纸 → 中秋按钮 → 灯笼雨 → 长按贴回
+ * ================================================================== */
+
+// 生成一轮中秋灯笼：横向打乱槽位均匀分布，纵向依次错开升起
+function buildFestivalRound() {
+	const count = isMobileDevice()
+		? FESTIVAL_LANTERN_COUNT_MOBILE
+		: FESTIVAL_LANTERN_COUNT_DESKTOP;
+	const slotWidth = FESTIVAL_SLOT_SPAN_VW / count;
+	const slots = Array.from({ length: count }, (_, index) => index);
+
+	for (let i = slots.length - 1; i > 0; i -= 1) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[slots[i], slots[j]] = [slots[j], slots[i]];
+	}
+
+	const items: FestivalLantern[] = [];
+	let delay = 0;
+	for (let i = 0; i < count; i += 1) {
+		delay += randomBetween(
+			FESTIVAL_BASE_GAP_MS,
+			FESTIVAL_BASE_GAP_MS + FESTIVAL_GAP_JITTER_MS,
+		);
+		festivalLanternSeed += 1;
+		items.push({
+			id: festivalLanternSeed,
+			left: `${((slots[i] + 0.25 + Math.random() * 0.5) * slotWidth).toFixed(2)}vw`,
+			duration: `${randomBetween(
+				FESTIVAL_RISE_MIN_S,
+				FESTIVAL_RISE_MIN_S + FESTIVAL_RISE_JITTER_S,
+			).toFixed(2)}s`,
+			delay: `${Math.round(delay)}ms`,
+		});
+	}
+
+	const maxDurationMs = (FESTIVAL_RISE_MIN_S + FESTIVAL_RISE_JITTER_S) * 1000;
+	const totalMs = delay + maxDurationMs + FESTIVAL_CLEANUP_BUFFER_MS;
+
+	return { items, totalMs };
+}
+
+function pickFestivalMessage() {
+	const messages =
+		FESTIVAL_MODE === "new-year" ? NEW_YEAR_MESSAGES : MID_AUTUMN_MESSAGES;
+	const message = messages[festivalMessageCursor % messages.length];
+	festivalMessageCursor += 1;
+	return message;
+}
+
+// 中秋效果：放飞一轮从页面底部升起的灯笼
+function triggerMidAutumnLanterns() {
+	const { items, totalMs } = buildFestivalRound();
+	festivalLanterns = items;
+
+	if (festivalTimer) {
+		clearTimeout(festivalTimer);
+	}
+	festivalTimer = setTimeout(() => {
+		festivalLanterns = [];
+		festivalTimer = null;
+	}, totalMs);
+
+	showLanternToast(pickFestivalMessage());
+}
+
+// 新年效果：挂出顶部的 4 个新年灯笼
+function triggerNewYearLanterns() {
+	isEnabled = true;
+	showLanternToast(pickFestivalMessage());
+}
+
+// 点击节日按钮：按当前开启的节日触发对应效果
+function triggerFestival() {
+	if (FESTIVAL_MODE === "new-year") {
+		triggerNewYearLanterns();
+		return;
+	}
+	triggerMidAutumnLanterns();
+}
+
+// 纸片被撕开后才露出的节日按钮文案
+function getFestivalButtonLabel() {
+	return FESTIVAL_MODE === "new-year" ? "🏮 新年快乐" : "🌕 中秋快乐";
+}
+
+function getTornAriaLabel() {
+	return FESTIVAL_MODE === "new-year"
+		? "点击挂起新年灯笼，长按把纸贴回来"
+		: "点击放飞中秋灯笼，长按把纸贴回来";
+}
+
+// 撕掉“灯笼已关”这层纸，露出中秋按钮
+function revealToggle() {
+	if (torn || tearing || restoring) return;
+	tearing = true;
+	if (tearTimer) {
+		clearTimeout(tearTimer);
+	}
+	tearTimer = setTimeout(() => {
+		tearing = false;
+		torn = true;
+		tearTimer = null;
+	}, TEAR_DURATION_MS);
+}
+
+// 长按：反向播放撕纸动画，把纸片贴回原位（恢复成“灯笼已关”），并收起节日效果
+function restoreToggle() {
+	if (!torn || restoring) return;
+	restoring = true;
+	// 新年模式：把已经挂上的灯笼一起收回去
+	if (FESTIVAL_MODE === "new-year") {
+		isEnabled = false;
+	}
+	if (tearTimer) {
+		clearTimeout(tearTimer);
+	}
+	tearTimer = setTimeout(() => {
+		restoring = false;
+		torn = false;
+		tearTimer = null;
+	}, TEAR_DURATION_MS);
+}
+
+function cancelLongPress() {
+	if (longPressTimer) {
+		clearTimeout(longPressTimer);
+		longPressTimer = null;
+	}
+}
+
+function handleTogglePressStart() {
+	cancelLongPress();
+	longPressTriggered = false;
+	longPressTimer = setTimeout(() => {
+		longPressTimer = null;
+		if (!torn || restoring) return;
+		longPressTriggered = true;
+		restoreToggle();
+	}, LONG_PRESS_MS);
+}
+
+function handleTogglePressEnd() {
+	cancelLongPress();
+}
+
+function handleToggleMouseEnter() {
+	revealToggle();
+}
+
+function handleToggleTouchStart() {
+	revealToggle();
+	handleTogglePressStart();
+}
+
+function handleToggleClick() {
+	// 长按恢复时不再触发中秋效果
+	if (longPressTriggered) {
+		longPressTriggered = false;
+		return;
+	}
+	// 纸还没撕掉（或正在贴回去）时先不触发效果
+	if (!torn || restoring) return;
+	triggerFestival();
+}
+
+/* ==================================================================
+ * 原彩蛋模式：躲开点击 + 连点 5 次消失（隐藏状态只在本页有效）
+ * ================================================================== */
 
 function getToggleElements() {
 	const control = document.querySelector(
-		".lantern-control",
+		".lantern-control--prank",
 	) as HTMLElement | null;
 	const toggle = document.querySelector(
-		".lantern-toggle-container",
+		".lantern-toggle-container--prank",
 	) as HTMLElement | null;
 	return { control, toggle };
 }
@@ -105,86 +436,10 @@ function getDefaultTogglePosition(marginPx = CONTROL_MARGIN_PX) {
 	};
 }
 
-function updateLanternToastPosition() {
-	if (typeof window === "undefined") return;
-	const toastEl = document.querySelector(
-		".lantern-toast",
-	) as HTMLElement | null;
-	const toastWidth = toastEl?.offsetWidth || TOAST_ESTIMATED_WIDTH;
-	const toastHeight = toastEl?.offsetHeight || TOAST_ESTIMATED_HEIGHT;
-	const minX = TOAST_MIN_MARGIN_PX;
-	const maxX = window.innerWidth - toastWidth - TOAST_MIN_MARGIN_PX;
-	const minY = TOAST_MIN_MARGIN_PX;
-	const maxY = window.innerHeight - toastHeight - TOAST_MIN_MARGIN_PX;
-
-	const setToastPosition = (x: number, y: number) => {
-		lanternToastX = Math.round(clamp(x, minX, maxX));
-		lanternToastY = Math.round(clamp(y, minY, maxY));
-	};
-
-	const { width, height } = getToggleSize();
-	const rightTopX = offsetX + width + TOAST_GAP_PX;
-	const leftTopX = offsetX - toastWidth - TOAST_GAP_PX;
-	const canPlaceRight =
-		rightTopX + toastWidth <= window.innerWidth - TOAST_MIN_MARGIN_PX;
-	const canPlaceLeft = leftTopX >= TOAST_MIN_MARGIN_PX;
-	let x = rightTopX;
-	if (!canPlaceRight && canPlaceLeft) {
-		x = leftTopX;
-	} else if (!canPlaceRight && !canPlaceLeft) {
-		x = offsetX + width / 2 - toastWidth / 2;
-	}
-	const y = offsetY - toastHeight - TOAST_GAP_PX;
-	setToastPosition(x, y);
-}
-
-function showLanternToast(message: string) {
-	lanternToastMessage = message;
-	lanternToastVisible = true;
-	updateLanternToastPosition();
-	requestAnimationFrame(() => {
-		updateLanternToastPosition();
-	});
-	if (lanternToastTimeout) {
-		clearTimeout(lanternToastTimeout);
-	}
-	lanternToastTimeout = setTimeout(() => {
-		lanternToastVisible = false;
-		lanternToastTimeout = null;
-	}, 1300);
-}
-
-function saveLanternState() {
-	if (!isLocalStorageAvailable()) return;
-	localStorage.setItem(LANTERN_ENABLED_KEY, isEnabled.toString());
-}
-
-function loadLanternState() {
-	if (!isLocalStorageAvailable()) return;
-	const savedState = localStorage.getItem(LANTERN_ENABLED_KEY);
-	if (savedState !== null) {
-		isEnabled = savedState === "true";
-		return;
-	}
-	// 默认关闭
-	isEnabled = false;
-}
-
-function saveControlState() {
-	if (!isLocalStorageAvailable()) return;
-	localStorage.setItem(
-		LANTERN_CONTROL_HIDDEN_KEY,
-		controlHidden ? "true" : "false",
-	);
-	localStorage.setItem(LANTERN_DODGE_ATTEMPTS_KEY, String(dodgeAttempts));
-}
-
-function loadControlState() {
-	if (!isLocalStorageAvailable()) return;
-	controlHidden = localStorage.getItem(LANTERN_CONTROL_HIDDEN_KEY) === "true";
-	const raw = localStorage.getItem(LANTERN_DODGE_ATTEMPTS_KEY);
-	const parsed = raw ? Number.parseInt(raw, 10) : 0;
-	dodgeAttempts = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+function getDeviceStorageKey() {
+	const deviceKey = isMobileDevice() ? "mobile" : "desktop";
+	currentDeviceKey = deviceKey;
+	return deviceKey;
 }
 
 function loadLanternPosition() {
@@ -269,11 +524,14 @@ function dodgeToggleFromPoint() {
 	saveLanternPosition();
 }
 
-function hideControlPermanently() {
+function hideControl() {
 	controlHidden = true;
-	isEnabled = false;
-	saveLanternState();
-	saveControlState();
+}
+
+function resetControlState() {
+	// 按需求：连点消失只在本页有效，刷新 / 重开页面按钮会重新出现
+	controlHidden = false;
+	dodgeAttempts = 0;
 }
 
 function handleToggleAttempt() {
@@ -283,13 +541,12 @@ function handleToggleAttempt() {
 		DODGE_TOAST_MESSAGES[(dodgeAttempts - 1) % DODGE_TOAST_MESSAGES.length];
 
 	if (dodgeAttempts >= MAX_DODGE_ATTEMPTS) {
-		hideControlPermanently();
+		hideControl();
 		showLanternToast("不陪你玩啦 我先藏好啦");
 		return;
 	}
 
 	dodgeToggleFromPoint();
-	saveControlState();
 	showLanternToast(message);
 }
 
@@ -297,42 +554,44 @@ function handleToggleMouseDown() {
 	handleToggleAttempt();
 }
 
-function handleToggleTouchStart() {
+function handleToggleTouchStartPrank() {
 	handleToggleAttempt();
 }
 
+/* ==================================================================
+ * 公共：窗口尺寸变化
+ * ================================================================== */
+
 function handleResize() {
-	const newDeviceKey = isMobileDevice() ? "mobile" : "desktop";
-	if (newDeviceKey !== currentDeviceKey) {
-		currentDeviceKey = newDeviceKey;
-		loadLanternPosition();
+	if (!IS_FESTIVAL_MODE) {
+		const newDeviceKey = isMobileDevice() ? "mobile" : "desktop";
+		if (newDeviceKey !== currentDeviceKey) {
+			currentDeviceKey = newDeviceKey;
+			loadLanternPosition();
+		}
+		clampOffsetToViewport();
+		saveLanternPosition();
 	}
-	clampOffsetToViewport();
-	saveLanternPosition();
 	if (lanternToastVisible) {
 		updateLanternToastPosition();
 	}
 }
 
 onMount(() => {
-	loadLanternState();
-	loadControlState();
+	cleanupLegacyState();
 
-	if (controlHidden) {
-		// 按需求：消失后不恢复，同时灯笼保持关闭
-		isEnabled = false;
-		saveLanternState();
-	}
-
-	currentDeviceKey = getDeviceStorageKey();
-	loadLanternPosition();
-	clampOffsetToViewport();
-	controlPositionReady = true;
-
-	requestAnimationFrame(() => {
+	if (!IS_FESTIVAL_MODE) {
+		resetControlState();
+		currentDeviceKey = getDeviceStorageKey();
+		loadLanternPosition();
 		clampOffsetToViewport();
-		saveLanternPosition();
-	});
+		controlPositionReady = true;
+
+		requestAnimationFrame(() => {
+			clampOffsetToViewport();
+			saveLanternPosition();
+		});
+	}
 
 	window.addEventListener("resize", handleResize);
 
@@ -341,6 +600,18 @@ onMount(() => {
 		if (lanternToastTimeout) {
 			clearTimeout(lanternToastTimeout);
 			lanternToastTimeout = null;
+		}
+		if (tearTimer) {
+			clearTimeout(tearTimer);
+			tearTimer = null;
+		}
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		if (festivalTimer) {
+			clearTimeout(festivalTimer);
+			festivalTimer = null;
 		}
 	};
 });
@@ -397,27 +668,88 @@ onMount(() => {
 	</div>
 {/if}
 
-{#if !controlHidden && controlPositionReady}
-	<!-- 控制开关 -->
-	<div class="lantern-control">
-		<div
-			class="lantern-toggle-container"
-			style={`transform: translate(${offsetX}px, ${offsetY}px);`}
-			tabindex="0"
-			role="button"
-			aria-label="灯笼控制按钮 会躲开点击"
-		>
+{#if IS_FESTIVAL_MODE}
+	<!-- 节日模式：默认是写着“灯笼已关”的纸片，移上去撕开露出节日按钮 -->
+	<div class="lantern-control lantern-control--festival">
+		<div class="lantern-toggle-container">
 			<button
 				type="button"
-				class="lantern-toggle"
-				on:mousedown|preventDefault|stopPropagation={handleToggleMouseDown}
-				on:touchstart|preventDefault|stopPropagation={handleToggleTouchStart}
-				aria-label="别点我 我会躲开"
+				class="lantern-toggle lantern-toggle--festival"
+				on:mouseenter={handleToggleMouseEnter}
+				on:focus={revealToggle}
+				on:mousedown={handleTogglePressStart}
+				on:mouseup={handleTogglePressEnd}
+				on:mouseleave={handleTogglePressEnd}
+				on:touchstart={handleToggleTouchStart}
+				on:touchend={handleTogglePressEnd}
+				on:touchcancel={handleTogglePressEnd}
+				on:click={handleToggleClick}
+				aria-label={torn
+					? getTornAriaLabel()
+					: "灯笼已关，把鼠标移上来看看"}
 			>
-				🏮 灯笼已关
+				<span class="lantern-toggle-festival" aria-hidden="true"
+					>{getFestivalButtonLabel()}</span
+				>
+
+				{#if !torn || restoring}
+					<span
+						class="paper paper-left"
+						class:is-tearing={tearing}
+						class:is-restoring={restoring}
+						aria-hidden="true"
+					>
+						<span class="paper-face">🏮 灯笼已关</span>
+					</span>
+					<span
+						class="paper paper-right"
+						class:is-tearing={tearing}
+						class:is-restoring={restoring}
+						aria-hidden="true"
+					>
+						<span class="paper-face">🏮 灯笼已关</span>
+					</span>
+				{/if}
 			</button>
 		</div>
 	</div>
+
+	<!-- 中秋灯笼雨（只有中秋模式才有） -->
+	{#if FESTIVAL_MODE === "mid-autumn" && festivalLanterns.length}
+		<div class="festival-layer" aria-hidden="true">
+			{#each festivalLanterns as lantern (lantern.id)}
+				<img
+					class="festival-lantern"
+					src={FESTIVAL_LANTERN_SRC}
+					alt=""
+					style={`left: ${lantern.left}; --rise-time: ${lantern.duration}; animation-delay: ${lantern.delay};`}
+				/>
+			{/each}
+		</div>
+	{/if}
+{:else}
+	<!-- 原彩蛋模式：会躲开点击的「灯笼已关」按钮 -->
+	{#if !controlHidden && controlPositionReady}
+		<div class="lantern-control lantern-control--prank">
+			<div
+				class="lantern-toggle-container lantern-toggle-container--prank"
+				style={`transform: translate(${offsetX}px, ${offsetY}px);`}
+				tabindex="0"
+				role="button"
+				aria-label="灯笼控制按钮 会躲开点击"
+			>
+				<button
+					type="button"
+					class="lantern-toggle lantern-toggle--prank"
+					on:mousedown|preventDefault|stopPropagation={handleToggleMouseDown}
+					on:touchstart|preventDefault|stopPropagation={handleToggleTouchStartPrank}
+					aria-label="别点我 我会躲开"
+				>
+					🏮 灯笼已关
+				</button>
+			</div>
+		</div>
+	{/if}
 {/if}
 
 {#if lanternToastVisible}
@@ -548,20 +880,220 @@ onMount(() => {
 	.pos-2 { margin-top: 40px; }
 	.pos-3 { margin-top: 40px; }
 	.pos-4 { margin-top: 10px; }
-	
-	/* 控制开关样式 */
+
+	/* 控制开关容器（两种模式共用定位外壳） */
 	.lantern-control {
 		position: fixed;
-		top: 0;
-		left: 0;
 		z-index: 10000;
 		pointer-events: none;
 	}
-	
+
+	/* 中秋模式：固定在右下角 */
+	.lantern-control--festival {
+		right: 2px;
+		bottom: 2px;
+	}
+
+	/* 原彩蛋模式：左上角 + transform 位移 */
+	.lantern-control--prank {
+		top: 0;
+		left: 0;
+	}
+
 	.lantern-toggle-container {
-		position: relative;
 		pointer-events: auto;
-		transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+	}
+
+	/* 原彩蛋模式的移动过渡 */
+	.lantern-toggle-container--prank {
+		transition: transform 0.1s ease-out;
+	}
+
+	/* 按钮本体（两种模式共用的基础样式） */
+	.lantern-toggle {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 8px 16px;
+		border-radius: 20px;
+		font-size: 14px;
+		font-weight: bold;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	/* 中秋模式的按钮（纸被撕掉后露出来的那个） */
+	.lantern-toggle--festival {
+		min-width: 8.6rem;
+		border: 2px solid #ffca28;
+		background-color: #8f1f1f;
+		color: #ffe4ad;
+		box-shadow:
+			0 2px 8px rgba(0, 0, 0, 0.28),
+			0 0 14px rgba(255, 180, 60, 0.28);
+		transition:
+			transform 0.25s ease,
+			box-shadow 0.25s ease;
+	}
+
+	.lantern-toggle--festival:hover {
+		transform: translateY(-2px);
+		box-shadow:
+			0 6px 16px rgba(0, 0, 0, 0.32),
+			0 0 22px rgba(255, 180, 60, 0.5);
+	}
+
+	.lantern-toggle--festival:active {
+		transform: translateY(0);
+	}
+
+	.lantern-toggle--festival:focus-visible {
+		outline: 2px solid #ffca28;
+		outline-offset: 2px;
+	}
+
+	.lantern-toggle-festival {
+		display: inline-flex;
+		align-items: center;
+		white-space: nowrap;
+		letter-spacing: 0.05em;
+		text-shadow: 0 0 10px rgba(255, 202, 40, 0.55);
+	}
+
+	/* 原彩蛋模式的按钮（原本的金色药丸样式） */
+	.lantern-toggle--prank {
+		background-color: rgba(255, 202, 40, 0.9);
+		color: #d32f2f;
+		border: 2px solid #d32f2f;
+		transition: all 0.3s ease;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	}
+
+	.lantern-toggle--prank:hover {
+		background-color: rgba(255, 202, 40, 1);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.lantern-toggle--prank:active {
+		transform: translateY(0);
+	}
+
+	/* 盖在按钮上的那张纸（默认显示“灯笼已关”） */
+	.paper {
+		position: absolute;
+		inset: -2px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 2px solid #d32f2f;
+		border-radius: 20px;
+		background-color: rgba(255, 202, 40, 0.95);
+		color: #d32f2f;
+		font-size: 14px;
+		font-weight: bold;
+		white-space: nowrap;
+		pointer-events: none;
+		will-change: transform, opacity;
+	}
+
+	.paper-face {
+		display: inline-flex;
+		align-items: center;
+	}
+
+	/* 撕开/贴回时的锯齿裂口（外缘仍保留纸片的圆角） */
+	.paper-left:is(.is-tearing, .is-restoring) {
+		clip-path: polygon(
+			13.4% 0,
+			52% 0,
+			45% 8%, 54% 16%, 44% 25%, 53% 34%, 45% 43%, 54% 52%,
+			45% 61%, 53% 70%, 44% 79%, 53% 88%, 46% 100%,
+			13.4% 100%,
+			3.9% 85.4%, 0 50%, 3.9% 14.6%
+		);
+		filter: drop-shadow(2px 0 3px rgba(0, 0, 0, 0.2));
+	}
+
+	.paper-right:is(.is-tearing, .is-restoring) {
+		clip-path: polygon(
+			52% 0,
+			86.6% 0,
+			96.1% 14.6%, 100% 50%, 96.1% 85.4%,
+			86.6% 100%,
+			46% 100%,
+			53% 88%, 44% 79%, 53% 70%, 45% 61%, 54% 52%,
+			45% 43%, 53% 34%, 44% 25%, 54% 16%, 45% 8%
+		);
+		filter: drop-shadow(-2px 0 3px rgba(0, 0, 0, 0.2));
+	}
+
+	/* 撕开：两半纸片分离飞走 */
+	.paper-left.is-tearing {
+		animation: tear-left 0.62s cubic-bezier(0.34, 0.8, 0.4, 1) forwards;
+	}
+
+	.paper-right.is-tearing {
+		animation: tear-right 0.62s cubic-bezier(0.34, 0.8, 0.4, 1) forwards;
+	}
+
+	/* 贴回：倒放同一段动画 */
+	.paper-left.is-restoring {
+		animation: tear-left 0.62s cubic-bezier(0.34, 0.8, 0.4, 1) reverse forwards;
+	}
+
+	.paper-right.is-restoring {
+		animation: tear-right 0.62s cubic-bezier(0.34, 0.8, 0.4, 1) reverse forwards;
+	}
+
+	@keyframes tear-left {
+		0% {
+			transform: translate(0, 0) rotate(0deg) scale(1);
+			opacity: 1;
+		}
+		100% {
+			transform: translate(-22px, 10px) rotate(-18deg) scale(1.04);
+			opacity: 0;
+		}
+	}
+
+	@keyframes tear-right {
+		0% {
+			transform: translate(0, 0) rotate(0deg) scale(1);
+			opacity: 1;
+		}
+		100% {
+			transform: translate(24px, -6px) rotate(16deg) scale(1.04);
+			opacity: 0;
+		}
+	}
+
+	/* 中秋灯笼雨：从页面底部升起的灯笼 */
+	.festival-layer {
+		position: fixed;
+		inset: 0;
+		z-index: 9990;
+		pointer-events: none;
+	}
+
+	.festival-lantern {
+		position: fixed;
+		bottom: -120px;
+		width: 45px;
+		height: auto;
+		pointer-events: none;
+		user-select: none;
+		will-change: transform;
+		animation: festival-rise var(--rise-time, 10s) linear forwards;
+	}
+
+	@keyframes festival-rise {
+		0% { transform: translateY(0); }
+		30% { transform: translateY(-30vh); }
+		55% { transform: translateY(-60vh); }
+		80% { transform: translateY(-90vh); }
+		100% { transform: translateY(-120vh); }
 	}
 
 	.lantern-toast {
@@ -581,34 +1113,17 @@ onMount(() => {
 		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
 		pointer-events: none;
 	}
-	
-	.lantern-toggle {
-		background-color: rgba(255, 202, 40, 0.9);
-		color: #d32f2f;
-		border: 2px solid #d32f2f;
-		border-radius: 20px;
-		padding: 8px 16px;
-		font-size: 14px;
-		font-weight: bold;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-		user-select: none;
-	}
-	
-	.lantern-toggle:hover {
-		background-color: rgba(255, 202, 40, 1);
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
-	
-	.lantern-toggle:active {
-		transform: translateY(0);
-	}
-	
-	/* 拖动动画效果 */
-	.lantern-toggle-container {
-		transition: transform 0.1s ease-out;
+
+	@media (prefers-reduced-motion: reduce) {
+		.paper-left:is(.is-tearing, .is-restoring),
+		.paper-right:is(.is-tearing, .is-restoring) {
+			animation-duration: 1ms;
+		}
+
+		.festival-lantern {
+			animation-duration: 1ms;
+			animation-delay: 0ms !important;
+		}
 	}
 
 	/* Mobile only adjustments */
@@ -670,15 +1185,23 @@ onMount(() => {
 			display: none;
 		}
 
-		.lantern-control {
-			top: 0;
-			left: 0;
+		.lantern-toggle--festival {
+			min-width: 7.6rem;
+			padding: 10px 14px;
 		}
 
-		.lantern-toggle {
+		.lantern-toggle--prank {
 			padding: 10px 18px;
-			font-size: 14px;
-			border-radius: 20px;
+		}
+
+		.paper,
+		.paper-face {
+			font-size: 13px;
+		}
+
+		.festival-lantern {
+			bottom: -90px;
+			width: 34px;
 		}
 
 		.lantern-toast {
