@@ -1,7 +1,15 @@
 <script lang="ts">
+import {
+	FESTIVAL_SETTINGS_CHANGE_EVENT,
+	type FestivalFlags,
+	type FestivalMode,
+	resolveFestivalFlags,
+	resolveFestivalMode,
+} from "@utils/festival-settings";
 import { onMount } from "svelte";
 import { cubicOut } from "svelte/easing";
 import { fade } from "svelte/transition";
+import festivalConfig from "../../data/festival.json";
 
 type FestivalLantern = {
 	id: number;
@@ -10,13 +18,12 @@ type FestivalLantern = {
 	delay: string;
 };
 
-type FestivalMode = "mid-autumn" | "new-year" | "none";
-
 /* ==================================================================
- * 节日开关（预备开关）
+ * 节日开关
  * ------------------------------------------------------------------
- * 同时只生效一个：先看中秋，再看新年；两个都关时按钮回到原来的
- * 「躲开点击 + 连点 5 次消失」彩蛋。
+ * 开关值来自仓库里的 src/data/festival.json：站内开发者控制台 /dev 可以切换，
+ * 保存后提交配置并触发重新部署，全站生效。
+ * 部署完成前，本机会先用「本机预览」立即生效（两者一致时自动清理预览）。
  *
  * 开启节日后，按钮统一走这套逻辑：
  *   「🏮 灯笼已关」纸片 → 悬停撕纸 → 露出节日按钮 → 点击触发节日效果 + 弹文字
@@ -24,19 +31,14 @@ type FestivalMode = "mid-autumn" | "new-year" | "none";
  *     中秋 = 露出「🌕 中秋快乐」，点击放飞中秋灯笼雨
  *     新年 = 露出「🏮 新年快乐」，点击挂出顶部 4 个新年灯笼
  *
- * 节日过去后把对应开关改成 false 即可屏蔽（其余代码不用动，方便下次再用）。
+ * 两个节日都关闭时，按钮回到原来的「躲开点击 + 连点 5 次消失」彩蛋。
  * ================================================================== */
-const MID_AUTUMN_ENABLED = true; // 中秋（现在是中秋，开着）
-const NEW_YEAR_ENABLED = false; // 春节（春节前改成 true 即可启用）
+const BUILD_FESTIVAL_FLAGS: FestivalFlags = {
+	midAutumn: festivalConfig.midAutumn,
+	newYear: festivalConfig.newYear,
+};
 
-function resolveFestivalMode(): FestivalMode {
-	if (MID_AUTUMN_ENABLED) return "mid-autumn";
-	if (NEW_YEAR_ENABLED) return "new-year";
-	return "none";
-}
-
-const FESTIVAL_MODE: FestivalMode = resolveFestivalMode();
-const IS_FESTIVAL_MODE = FESTIVAL_MODE !== "none";
+let festivalMode: FestivalMode = resolveFestivalMode(BUILD_FESTIVAL_FLAGS);
 /* ================================================================== */
 
 // 旧版本把灯笼/按钮状态持久化进了 localStorage，现在只用于清理，不再读写
@@ -158,7 +160,7 @@ function cleanupLegacyState() {
 	localStorage.removeItem(LEGACY_LANTERN_ENABLED_KEY);
 	localStorage.removeItem(LEGACY_LANTERN_CONTROL_HIDDEN_KEY);
 	localStorage.removeItem(LEGACY_LANTERN_DODGE_ATTEMPTS_KEY);
-	if (IS_FESTIVAL_MODE) {
+	if (festivalMode !== "none") {
 		// 节日模式下按钮固定在右下角，旧的位置记录不再需要
 		for (const key of LEGACY_LANTERN_POSITION_KEYS) {
 			localStorage.removeItem(key);
@@ -269,7 +271,7 @@ function buildFestivalRound() {
 
 function pickFestivalMessage() {
 	const messages =
-		FESTIVAL_MODE === "new-year" ? NEW_YEAR_MESSAGES : MID_AUTUMN_MESSAGES;
+		festivalMode === "new-year" ? NEW_YEAR_MESSAGES : MID_AUTUMN_MESSAGES;
 	const message = messages[festivalMessageCursor % messages.length];
 	festivalMessageCursor += 1;
 	return message;
@@ -299,7 +301,7 @@ function triggerNewYearLanterns() {
 
 // 点击节日按钮：按当前开启的节日触发对应效果
 function triggerFestival() {
-	if (FESTIVAL_MODE === "new-year") {
+	if (festivalMode === "new-year") {
 		triggerNewYearLanterns();
 		return;
 	}
@@ -308,11 +310,11 @@ function triggerFestival() {
 
 // 纸片被撕开后才露出的节日按钮文案
 function getFestivalButtonLabel() {
-	return FESTIVAL_MODE === "new-year" ? "🏮 新年快乐" : "🌕 中秋快乐";
+	return festivalMode === "new-year" ? "🏮 新年快乐" : "🌕 中秋快乐";
 }
 
 function getTornAriaLabel() {
-	return FESTIVAL_MODE === "new-year"
+	return festivalMode === "new-year"
 		? "点击挂起新年灯笼，长按把纸贴回来"
 		: "点击放飞中秋灯笼，长按把纸贴回来";
 }
@@ -336,7 +338,7 @@ function restoreToggle() {
 	if (!torn || restoring) return;
 	restoring = true;
 	// 新年模式：把已经挂上的灯笼一起收回去
-	if (FESTIVAL_MODE === "new-year") {
+	if (festivalMode === "new-year") {
 		isEnabled = false;
 	}
 	if (tearTimer) {
@@ -559,11 +561,59 @@ function handleToggleTouchStartPrank() {
 }
 
 /* ==================================================================
- * 公共：窗口尺寸变化
+ * 公共：节日模式切换 / 窗口尺寸变化
  * ================================================================== */
 
+// 切换节日时清掉上一个节日残留的动画与灯笼，避免状态串台
+function resetFestivalState() {
+	tearing = false;
+	torn = false;
+	restoring = false;
+	festivalLanterns = [];
+	isEnabled = false;
+	if (tearTimer) {
+		clearTimeout(tearTimer);
+		tearTimer = null;
+	}
+	if (longPressTimer) {
+		clearTimeout(longPressTimer);
+		longPressTimer = null;
+	}
+	if (festivalTimer) {
+		clearTimeout(festivalTimer);
+		festivalTimer = null;
+	}
+}
+
+// 原彩蛋模式的初始化（位置记忆 + 显示按钮）
+function initControlPosition() {
+	resetControlState();
+	currentDeviceKey = getDeviceStorageKey();
+	loadLanternPosition();
+	clampOffsetToViewport();
+	controlPositionReady = true;
+
+	requestAnimationFrame(() => {
+		clampOffsetToViewport();
+		saveLanternPosition();
+	});
+}
+
+/**
+ * 计算当前该用哪种节日模式：构建期配置优先被「本机即时预览」覆盖
+ */
+function applyFestivalMode() {
+	const next = resolveFestivalMode(resolveFestivalFlags(BUILD_FESTIVAL_FLAGS));
+	if (next === festivalMode) return;
+	resetFestivalState();
+	festivalMode = next;
+	if (next === "none") {
+		initControlPosition();
+	}
+}
+
 function handleResize() {
-	if (!IS_FESTIVAL_MODE) {
+	if (festivalMode === "none") {
 		const newDeviceKey = isMobileDevice() ? "mobile" : "desktop";
 		if (newDeviceKey !== currentDeviceKey) {
 			currentDeviceKey = newDeviceKey;
@@ -579,23 +629,21 @@ function handleResize() {
 
 onMount(() => {
 	cleanupLegacyState();
+	applyFestivalMode();
 
-	if (!IS_FESTIVAL_MODE) {
-		resetControlState();
-		currentDeviceKey = getDeviceStorageKey();
-		loadLanternPosition();
-		clampOffsetToViewport();
-		controlPositionReady = true;
-
-		requestAnimationFrame(() => {
-			clampOffsetToViewport();
-			saveLanternPosition();
-		});
+	if (festivalMode === "none") {
+		initControlPosition();
 	}
 
+	// 控制台保存后广播事件，这里立刻切到新效果
+	window.addEventListener(FESTIVAL_SETTINGS_CHANGE_EVENT, applyFestivalMode);
 	window.addEventListener("resize", handleResize);
 
 	return () => {
+		window.removeEventListener(
+			FESTIVAL_SETTINGS_CHANGE_EVENT,
+			applyFestivalMode,
+		);
 		window.removeEventListener("resize", handleResize);
 		if (lanternToastTimeout) {
 			clearTimeout(lanternToastTimeout);
@@ -668,7 +716,7 @@ onMount(() => {
 	</div>
 {/if}
 
-{#if IS_FESTIVAL_MODE}
+{#if festivalMode !== "none"}
 	<!-- 节日模式：默认是写着“灯笼已关”的纸片，移上去撕开露出节日按钮 -->
 	<div class="lantern-control lantern-control--festival">
 		<div class="lantern-toggle-container">
@@ -715,7 +763,7 @@ onMount(() => {
 	</div>
 
 	<!-- 中秋灯笼雨（只有中秋模式才有） -->
-	{#if FESTIVAL_MODE === "mid-autumn" && festivalLanterns.length}
+	{#if festivalMode === "mid-autumn" && festivalLanterns.length}
 		<div class="festival-layer" aria-hidden="true">
 			{#each festivalLanterns as lantern (lantern.id)}
 				<img

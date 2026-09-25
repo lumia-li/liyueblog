@@ -1,0 +1,13 @@
+---
+import DevConsoleNav from "@components/editor/DevConsoleNav.svelte";
+import FestivalSettings from "@components/editor/FestivalSettings.svelte";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+---
+
+<MainGridLayout
+	title="开发者控制台"
+	description="节日效果开关与开发者工具入口"
+>
+	<DevConsoleNav client:load active="festival" />
+	<FestivalSettings client:only="svelte" />
+</MainGridLayout>

@@ -1,9 +1,10 @@
 ﻿---
+import DevConsoleNav from "@components/editor/DevConsoleNav.svelte";
 import DeveloperEditor from "@components/editor/DeveloperEditor.svelte";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
 ---
 
 <MainGridLayout title="内容编辑器" description="开发者模式内容编辑器">
+	<DevConsoleNav client:load active="editor" />
 	<DeveloperEditor client:only="svelte" />
 </MainGridLayout>
-
