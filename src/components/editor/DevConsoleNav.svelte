@@ -3,11 +3,7 @@ import { getDeveloperModeEnabled } from "@utils/setting-utils";
 import { url } from "@utils/url-utils";
 import { onMount } from "svelte";
 
-interface Props {
-	active: "festival" | "editor";
-}
-
-export let active: Props["active"];
+export let active: "festival" | "editor";
 
 let devEnabled = false;
 

@@ -23,6 +23,7 @@ type Status = {
 const BUILD_FLAGS: FestivalFlags = {
 	midAutumn: buildFlags.midAutumn,
 	newYear: buildFlags.newYear,
+	nationalDay: buildFlags.nationalDay,
 };
 
 let devEnabled = false;
@@ -35,11 +36,13 @@ let previewActive = false;
 
 $: dirty =
 	flags.midAutumn !== remoteFlags.midAutumn ||
-	flags.newYear !== remoteFlags.newYear;
+	flags.newYear !== remoteFlags.newYear ||
+	flags.nationalDay !== remoteFlags.nationalDay;
 
 function describeFlags(value: FestivalFlags): string {
 	if (value.midAutumn) return "中秋效果已开启";
 	if (value.newYear) return "春节效果已开启";
+	if (value.nationalDay) return "国庆效果已开启";
 	return "全部关闭";
 }
 
@@ -51,17 +54,17 @@ function setStatus(kind: StatusKind, text: string) {
 	status = { kind, text };
 }
 
-// 两个效果互斥：开启一个会自动关掉另一个
-function toggleMidAutumn() {
-	flags = flags.midAutumn
-		? { midAutumn: false, newYear: false }
-		: { midAutumn: true, newYear: false };
-}
-
-function toggleNewYear() {
-	flags = flags.newYear
-		? { midAutumn: false, newYear: false }
-		: { midAutumn: false, newYear: true };
+// 三个效果互斥：开启一个会自动关掉另外两个
+function toggleFestival(key: keyof FestivalFlags) {
+	if (flags[key]) {
+		flags = { midAutumn: false, newYear: false, nationalDay: false };
+		return;
+	}
+	flags = {
+		midAutumn: key === "midAutumn",
+		newYear: key === "newYear",
+		nationalDay: key === "nationalDay",
+	};
 }
 
 async function readResponseFlags(response: Response) {
@@ -176,7 +179,7 @@ onMount(() => {
 					aria-checked={flags.midAutumn}
 					aria-label="中秋效果"
 					disabled={loading || saving}
-					on:click={toggleMidAutumn}
+					on:click={() => toggleFestival("midAutumn")}
 				>
 					<span class="festival-switch-knob"></span>
 				</button>
@@ -192,7 +195,23 @@ onMount(() => {
 					aria-checked={flags.newYear}
 					aria-label="春节效果"
 					disabled={loading || saving}
-					on:click={toggleNewYear}
+					on:click={() => toggleFestival("newYear")}
+				>
+					<span class="festival-switch-knob"></span>
+				</button>
+			</div>
+
+			<div class="festival-row">
+				<span class="festival-name">国庆效果 🌼</span>
+				<button
+					type="button"
+					class="festival-switch"
+					class:is-on={flags.nationalDay}
+					role="switch"
+					aria-checked={flags.nationalDay}
+					aria-label="国庆效果"
+					disabled={loading || saving}
+					on:click={() => toggleFestival("nationalDay")}
 				>
 					<span class="festival-switch-knob"></span>
 				</button>

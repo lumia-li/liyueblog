@@ -1632,6 +1632,11 @@ const homeBannerHeight = "56vh";
 
 	                        // 睡觉期间，waifu-tips.js 自动弹出的气泡（欢迎语、每 20 秒的随机语等）也统一换成睡觉文案
 	                        const sleepingMessageTexts = new Set(sleepingMessages);
+	                        // 其他模块（如节日效果）可以把自己的“睡觉台词”登记进来，避免被统一替换掉
+	                        const isRegisteredSleepingMessage = (text) => {
+	                            const registered = window.__extraSleepingWaifuMessages;
+	                            return Array.isArray(registered) && registered.includes(text);
+	                        };
 	                        const waifuTipsElement = document.getElementById("waifu-tips");
 	                        if (waifuTipsElement) {
 	                            const replaceTipsWithSleepingMessage = () => {
@@ -1639,7 +1644,11 @@ const homeBannerHeight = "56vh";
 	                                    return;
 	                                }
 	                                const currentTipsText = (waifuTipsElement.textContent || "").trim();
-	                                if (!currentTipsText || sleepingMessageTexts.has(currentTipsText)) {
+	                                if (
+	                                    !currentTipsText ||
+	                                    sleepingMessageTexts.has(currentTipsText) ||
+	                                    isRegisteredSleepingMessage(currentTipsText)
+	                                ) {
 	                                    return;
 	                                }
 	                                showWaifuMessage(randomPick(sleepingMessages), 6000, { force: true });

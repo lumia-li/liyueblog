@@ -5,9 +5,10 @@
 export type FestivalFlags = {
 	midAutumn: boolean;
 	newYear: boolean;
+	nationalDay: boolean;
 };
 
-export type FestivalMode = "mid-autumn" | "new-year" | "none";
+export type FestivalMode = "mid-autumn" | "new-year" | "national-day" | "none";
 
 /** 仓库里节日配置文件的路径（构建期读取 + 控制台写入都用它） */
 export const FESTIVAL_CONFIG_REPO_PATH = "src/data/festival.json";
@@ -21,6 +22,7 @@ export const FESTIVAL_SETTINGS_CHANGE_EVENT = "festival-settings-change";
 export function resolveFestivalMode(flags: FestivalFlags): FestivalMode {
 	if (flags.midAutumn) return "mid-autumn";
 	if (flags.newYear) return "new-year";
+	if (flags.nationalDay) return "national-day";
 	return "none";
 }
 
@@ -37,11 +39,20 @@ function canUseStorage(): boolean {
 
 export function normalizeFestivalFlags(value: unknown): FestivalFlags | null {
 	if (!value || typeof value !== "object") return null;
-	const raw = value as { midAutumn?: unknown; newYear?: unknown };
+	const raw = value as {
+		midAutumn?: unknown;
+		newYear?: unknown;
+		nationalDay?: unknown;
+	};
 	if (typeof raw.midAutumn !== "boolean" || typeof raw.newYear !== "boolean") {
 		return null;
 	}
-	return { midAutumn: raw.midAutumn, newYear: raw.newYear };
+	// 国庆是后加的字段：老配置里没有时按关闭处理
+	return {
+		midAutumn: raw.midAutumn,
+		newYear: raw.newYear,
+		nationalDay: raw.nationalDay === true,
+	};
 }
 
 export function readFestivalPreview(): FestivalFlags | null {

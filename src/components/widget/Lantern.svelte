@@ -18,6 +18,16 @@ type FestivalLantern = {
 	delay: string;
 };
 
+type FestivalFlower = {
+	id: number;
+	left: string;
+	src: string;
+	duration: string;
+	delay: string;
+	sway: string;
+	rockTime: string;
+};
+
 /* ==================================================================
  * 节日开关
  * ------------------------------------------------------------------
@@ -30,12 +40,14 @@ type FestivalLantern = {
  *   → 长按倒放撕纸、把纸片贴回去
  *     中秋 = 露出「🌕 中秋快乐」，点击放飞中秋灯笼雨
  *     新年 = 露出「🏮 新年快乐」，点击挂出顶部 4 个新年灯笼
+ *     国庆 = 露出「🌼 国庆快乐」，点击撒下一轮国庆花朵
  *
- * 两个节日都关闭时，按钮回到原来的「躲开点击 + 连点 5 次消失」彩蛋。
+ * 三个节日都关闭时，按钮回到原来的「躲开点击 + 连点 5 次消失」彩蛋。
  * ================================================================== */
 const BUILD_FESTIVAL_FLAGS: FestivalFlags = {
 	midAutumn: festivalConfig.midAutumn,
 	newYear: festivalConfig.newYear,
+	nationalDay: festivalConfig.nationalDay,
 };
 
 let festivalMode: FestivalMode = resolveFestivalMode(BUILD_FESTIVAL_FLAGS);
@@ -53,7 +65,7 @@ const LEGACY_LANTERN_POSITION_KEYS = [
 /* ---------------- 中秋模式参数 ---------------- */
 // 撕纸动画时长（需与 CSS 中的 animation 时长保持一致）
 const TEAR_DURATION_MS = 640;
-// 长按多久算“长按”（长按 = 把纸片贴回去）
+// 长按多久算"长按"（长按 = 把纸片贴回去）
 const LONG_PRESS_MS = 600;
 // 中秋灯笼素材（位于 public/images/）
 const FESTIVAL_LANTERN_SRC = "/images/mid-autumn-lantern.svg";
@@ -80,6 +92,133 @@ const NEW_YEAR_MESSAGES = [
 	"🧧 恭喜发财，红包拿来",
 	"🎊 新的一年，越过越顺",
 ];
+// 国庆模式的提示文字
+const NATIONAL_DAY_MESSAGES = [
+	"🎉 国庆快乐，假期愉快",
+	"🌼 花朵飘落，祝福满满",
+	"🎊 吃好玩好，万事顺遂",
+	"✨ 山河明媚，好运连连",
+];
+
+/* ---------------- 国庆模式参数 ---------------- */
+// 花朵素材（位于 public/images/）
+const NATIONAL_DAY_FLOWERS = [
+	"/images/national-day-flower-yellow.svg",
+	"/images/national-day-flower-orange.svg",
+];
+const NATIONAL_DAY_FLOWER_COUNT_DESKTOP = 30;
+const NATIONAL_DAY_FLOWER_COUNT_MOBILE = 18;
+// 横向槽位数量：每轮洗牌后依次占用，保证分布均匀
+const NATIONAL_DAY_SLOT_COUNT = 16;
+const NATIONAL_DAY_SPAWN_MIN_MS = 40;
+const NATIONAL_DAY_SPAWN_JITTER_MS = 50;
+const NATIONAL_DAY_FALL_MIN_S = 4;
+const NATIONAL_DAY_FALL_JITTER_S = 2;
+const NATIONAL_DAY_SWAY_MIN_PX = 12;
+const NATIONAL_DAY_SWAY_JITTER_PX = 20;
+const NATIONAL_DAY_ROCK_MIN_S = 0.55;
+const NATIONAL_DAY_ROCK_JITTER_S = 0.35;
+
+/* ---------------- 看板娘台词 ---------------- */
+// 触发节日效果时看板娘说的话（看板娘只在桌面端加载，没加载成功时静默跳过）
+// 带日期的台词只在她「今天真的是这个节日」时才说：
+//   中秋 = 农历八月十五、春节 = 农历正月初一、国庆 = 10月1日
+const WAIFU_MESSAGE_DURATION_MS = 5000;
+const WAIFU_SLEEP_STORAGE_KEY = "Sleepy";
+
+// 农历月日：用运行环境内置的农历日历算，不引第三方库
+function getLunarDate(now: Date): { month: number; day: number } | null {
+	try {
+		const parts = new Intl.DateTimeFormat("en-u-ca-chinese", {
+			month: "numeric",
+			day: "numeric",
+		}).formatToParts(now);
+		const month = Number(parts.find((part) => part.type === "month")?.value);
+		const day = Number(parts.find((part) => part.type === "day")?.value);
+		if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
+		return { month, day };
+	} catch {
+		return null;
+	}
+}
+
+// 今天是不是农历某月某日（如八月十五）
+function isLunarFestivalDay(now: Date, month: number, day: number): boolean {
+	const lunar = getLunarDate(now);
+	return lunar !== null && lunar.month === month && lunar.day === day;
+}
+
+// 今天是不是公历某月某日（如 10 月 1 日）
+function isSolarDay(now: Date, month: number, day: number): boolean {
+	return now.getMonth() + 1 === month && now.getDate() === day;
+}
+
+type WaifuFestivalLines = {
+	/** 今天是不是这个节日的真实日子 */
+	isFestivalDay: (now: Date) => boolean;
+	/** 只有节日本身那天才说的日期台词，{date} 会替换成今天的真实日期 */
+	dateLine: string;
+	sleepyDateLine: string;
+	awake: string[];
+	sleepy: string[];
+};
+const WAIFU_FESTIVAL_LINES: Record<
+	Exclude<FestivalMode, "none">,
+	WaifuFestivalLines
+> = {
+	"mid-autumn": {
+		isFestivalDay: (now) => isLunarFestivalDay(now, 8, 15),
+		dateLine: "今天是{date}，<span>中秋节</span>哦~有没有吃月饼或者看看月亮呀?",
+		sleepyDateLine:
+			"唔……今天{date}呀……<span>中秋节</span>……（打哈欠）月亮好圆……",
+		awake: [
+			"🌕 <span>中秋快乐</span>~今晚的月亮好圆，记得吃月饼哦！",
+			"灯笼都升起来啦，要不要一起<span>赏月</span>呀~",
+			"月饼你爱吃甜的还是咸的?我两个都要！",
+			"月圆人团圆，今天记得跟家里人说说话呀~",
+			"听说今晚的月亮最圆，快抬头看看呀~",
+		],
+		sleepy: [
+			"唔……（打哈欠）让我……再吃一口月饼……",
+			"呼……灯笼都飘到我梦里了……月亮也在梦里……",
+			"（梦话）五仁月饼……也不是不能吃啦……",
+		],
+	},
+	"new-year": {
+		isFestivalDay: (now) => isLunarFestivalDay(now, 1, 1),
+		dateLine: "今天是{date}，<span>春节</span>哦~ 新年快乐，红包拿来呀！",
+		sleepyDateLine: "唔……今天{date}呀……<span>春节</span>……（打哈欠）红包……",
+		awake: [
+			"🏮 <span>新年快乐</span>~新的一年也要开开心心的哦！",
+			"灯笼挂好啦，快许个<span>新年愿望</span>吧~",
+			"过年吃饺子还是汤圆?我都想要~",
+			"新的一年，希望你事事顺遂、少熬夜呀！",
+			"今天要走亲戚还是在家躺着?我猜是躺着~",
+		],
+		sleepy: [
+			"唔……（打哈欠）红包……再给我一个嘛……",
+			"呼……守岁就交给你啦……我先眯一会儿……",
+			"（梦话）鞭炮……好吵……可是好热闹……",
+		],
+	},
+	"national-day": {
+		isFestivalDay: (now) => isSolarDay(now, 10, 1),
+		dateLine: "今天是{date}，<span>国庆节</span>哦~假期要好好休息呀！",
+		sleepyDateLine: "唔……今天{date}呀……<span>国庆节</span>……（打哈欠）假期……",
+		awake: [
+			"🌼 <span>国庆快乐</span>~假期要好好休息哦！",
+			"花朵都飘下来啦，祝你<span>玩得开心</span>~",
+			"假期计划好去哪里玩了吗?人多的地方要小心呀~",
+			"出去走走也好，宅在家里也好，开心最重要呀~",
+			"别忘了给家里打个电话，顺便报告一下行程~",
+		],
+		sleepy: [
+			"唔……（打哈欠）假期……就是要睡觉呀……",
+			"呼……再睡五分钟……假期还长着呢……",
+			"（梦话）别叫我……景点人太多了……",
+		],
+	},
+};
 
 /* ---------------- 原彩蛋模式参数 ---------------- */
 const MIN_VISIBLE_PIXELS = 32;
@@ -112,9 +251,11 @@ let tearTimer: ReturnType<typeof setTimeout> | null = null;
 let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 let longPressTriggered = false;
 let festivalLanterns: FestivalLantern[] = [];
+let festivalFlowers: FestivalFlower[] = [];
 let festivalTimer: ReturnType<typeof setTimeout> | null = null;
 let festivalMessageCursor = 0;
 let festivalLanternSeed = 0;
+let festivalFlowerSeed = 0;
 
 // 原彩蛋模式状态
 let offsetX = 0;
@@ -269,9 +410,14 @@ function buildFestivalRound() {
 	return { items, totalMs };
 }
 
+function getFestivalMessages() {
+	if (festivalMode === "new-year") return NEW_YEAR_MESSAGES;
+	if (festivalMode === "national-day") return NATIONAL_DAY_MESSAGES;
+	return MID_AUTUMN_MESSAGES;
+}
+
 function pickFestivalMessage() {
-	const messages =
-		festivalMode === "new-year" ? NEW_YEAR_MESSAGES : MID_AUTUMN_MESSAGES;
+	const messages = getFestivalMessages();
 	const message = messages[festivalMessageCursor % messages.length];
 	festivalMessageCursor += 1;
 	return message;
@@ -299,10 +445,171 @@ function triggerNewYearLanterns() {
 	showLanternToast(pickFestivalMessage());
 }
 
+// 洗牌：返回 0..length-1 的乱序数组
+function buildShuffledQueue(length: number): number[] {
+	const queue = Array.from({ length }, (_, index) => index);
+	for (let i = queue.length - 1; i > 0; i -= 1) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[queue[i], queue[j]] = [queue[j], queue[i]];
+	}
+	return queue;
+}
+
+// 生成一轮国庆花朵：素材与横向槽位都洗牌后依次取用，保证数量均衡、分布均匀
+function buildNationalDayRound() {
+	const count = isMobileDevice()
+		? NATIONAL_DAY_FLOWER_COUNT_MOBILE
+		: NATIONAL_DAY_FLOWER_COUNT_DESKTOP;
+	const assetQueue = buildShuffledQueue(NATIONAL_DAY_FLOWERS.length);
+	const slotQueue = buildShuffledQueue(NATIONAL_DAY_SLOT_COUNT);
+
+	const items: FestivalFlower[] = [];
+	let delay = 0;
+	for (let i = 0; i < count; i += 1) {
+		delay += randomBetween(
+			NATIONAL_DAY_SPAWN_MIN_MS,
+			NATIONAL_DAY_SPAWN_MIN_MS + NATIONAL_DAY_SPAWN_JITTER_MS,
+		);
+		if (assetQueue.length === 0) {
+			assetQueue.push(...buildShuffledQueue(NATIONAL_DAY_FLOWERS.length));
+		}
+		if (slotQueue.length === 0) {
+			slotQueue.push(...buildShuffledQueue(NATIONAL_DAY_SLOT_COUNT));
+		}
+		const assetIndex = assetQueue.pop() ?? 0;
+		const slot = slotQueue.pop() ?? 0;
+		const swayDirection = Math.random() < 0.5 ? -1 : 1;
+
+		festivalFlowerSeed += 1;
+		items.push({
+			id: festivalFlowerSeed,
+			src: NATIONAL_DAY_FLOWERS[assetIndex],
+			left: `${(((slot + 0.2 + Math.random() * 0.6) / NATIONAL_DAY_SLOT_COUNT) * 96).toFixed(2)}vw`,
+			duration: `${randomBetween(
+				NATIONAL_DAY_FALL_MIN_S,
+				NATIONAL_DAY_FALL_MIN_S + NATIONAL_DAY_FALL_JITTER_S,
+			).toFixed(2)}s`,
+			delay: `${Math.round(delay)}ms`,
+			sway: `${Math.round(
+				swayDirection *
+					randomBetween(
+						NATIONAL_DAY_SWAY_MIN_PX,
+						NATIONAL_DAY_SWAY_MIN_PX + NATIONAL_DAY_SWAY_JITTER_PX,
+					),
+			)}px`,
+			rockTime: `${randomBetween(
+				NATIONAL_DAY_ROCK_MIN_S,
+				NATIONAL_DAY_ROCK_MIN_S + NATIONAL_DAY_ROCK_JITTER_S,
+			).toFixed(2)}s`,
+		});
+	}
+
+	const maxFallMs =
+		(NATIONAL_DAY_FALL_MIN_S + NATIONAL_DAY_FALL_JITTER_S) * 1000;
+	const totalMs = delay + maxFallMs + FESTIVAL_CLEANUP_BUFFER_MS;
+
+	return { items, totalMs };
+}
+
+// 国庆效果：从顶部落下一轮花朵（边落边左右摇晃）
+function triggerNationalDayFlowers() {
+	const { items, totalMs } = buildNationalDayRound();
+	festivalFlowers = items;
+
+	if (festivalTimer) {
+		clearTimeout(festivalTimer);
+	}
+	festivalTimer = setTimeout(() => {
+		festivalFlowers = [];
+		festivalTimer = null;
+	}, totalMs);
+
+	showLanternToast(pickFestivalMessage());
+}
+
+// 看板娘是不是睡着了（睡觉状态由 Layout 的 Live2D 逻辑写在 sessionStorage）
+function isWaifuSleeping(): boolean {
+	if (typeof window === "undefined") return false;
+	try {
+		return sessionStorage.getItem(WAIFU_SLEEP_STORAGE_KEY) === "1";
+	} catch {
+		return false;
+	}
+}
+
+// 今天的日期，如「9月25日」
+function getTodayLabel(): string {
+	const today = new Date();
+	return `${today.getMonth() + 1}月${today.getDate()}日`;
+}
+
+// 当前节日该说的台词：今天真是这个节日才加带日期那句，其余时候说普通（或瞌睡）台词
+function buildFestivalWaifuLines(sleeping: boolean): string[] {
+	if (festivalMode === "none") return [];
+	const lines = WAIFU_FESTIVAL_LINES[festivalMode];
+	if (!lines) return [];
+	const baseLines = sleeping ? lines.sleepy : lines.awake;
+	if (!lines.isFestivalDay(new Date())) {
+		return [...baseLines];
+	}
+	const dateTemplate = sleeping ? lines.sleepyDateLine : lines.dateLine;
+	return [dateTemplate.replace("{date}", getTodayLabel()), ...baseLines];
+}
+
+// 睡觉时的节日台词要登记给 Layout，避免被通用的睡觉文案替换掉
+function rememberSleepingWaifuLine(line: string) {
+	if (typeof window === "undefined") return;
+	const registered = window.__extraSleepingWaifuMessages;
+	if (Array.isArray(registered)) {
+		if (!registered.includes(line)) {
+			registered.push(line);
+		}
+		return;
+	}
+	window.__extraSleepingWaifuMessages = [line];
+}
+
+// 让看板娘说一句当前节日的台词（她睡着时说的是瞌睡版本）
+function speakFestivalWaifuMessage() {
+	if (typeof window === "undefined" || festivalMode === "none") return;
+	const sleeping = isWaifuSleeping();
+	const lines = buildFestivalWaifuLines(sleeping);
+	if (lines.length === 0) return;
+
+	const line = lines[Math.floor(Math.random() * lines.length)];
+	if (sleeping) {
+		rememberSleepingWaifuLine(line);
+	}
+
+	const speak = (): boolean => {
+		const show = window.showWaifuMessage;
+		if (typeof show !== "function") return false;
+		show(line, WAIFU_MESSAGE_DURATION_MS);
+		return true;
+	};
+
+	if (speak()) return;
+
+	// 看板娘可能还没加载完（移动端不加载），稍后重试几次
+	let attempts = 0;
+	const timer = window.setInterval(() => {
+		attempts += 1;
+		if (speak() || attempts >= 6) {
+			window.clearInterval(timer);
+		}
+	}, 600);
+}
+
 // 点击节日按钮：按当前开启的节日触发对应效果
 function triggerFestival() {
+	speakFestivalWaifuMessage();
+
 	if (festivalMode === "new-year") {
 		triggerNewYearLanterns();
+		return;
+	}
+	if (festivalMode === "national-day") {
+		triggerNationalDayFlowers();
 		return;
 	}
 	triggerMidAutumnLanterns();
@@ -310,16 +617,19 @@ function triggerFestival() {
 
 // 纸片被撕开后才露出的节日按钮文案
 function getFestivalButtonLabel() {
-	return festivalMode === "new-year" ? "🏮 新年快乐" : "🌕 中秋快乐";
+	if (festivalMode === "new-year") return "🏮 新年快乐";
+	if (festivalMode === "national-day") return "🌼 国庆快乐";
+	return "🌕 中秋快乐";
 }
 
 function getTornAriaLabel() {
-	return festivalMode === "new-year"
-		? "点击挂起新年灯笼，长按把纸贴回来"
-		: "点击放飞中秋灯笼，长按把纸贴回来";
+	if (festivalMode === "new-year") return "点击挂起新年灯笼，长按把纸贴回来";
+	if (festivalMode === "national-day")
+		return "点击撒下国庆花朵，长按把纸贴回来";
+	return "点击放飞中秋灯笼，长按把纸贴回来";
 }
 
-// 撕掉“灯笼已关”这层纸，露出中秋按钮
+// 撕掉"灯笼已关"这层纸，露出中秋按钮
 function revealToggle() {
 	if (torn || tearing || restoring) return;
 	tearing = true;
@@ -333,7 +643,7 @@ function revealToggle() {
 	}, TEAR_DURATION_MS);
 }
 
-// 长按：反向播放撕纸动画，把纸片贴回原位（恢复成“灯笼已关”），并收起节日效果
+// 长按：反向播放撕纸动画，把纸片贴回原位（恢复成"灯笼已关"），并收起节日效果
 function restoreToggle() {
 	if (!torn || restoring) return;
 	restoring = true;
@@ -570,6 +880,7 @@ function resetFestivalState() {
 	torn = false;
 	restoring = false;
 	festivalLanterns = [];
+	festivalFlowers = [];
 	isEnabled = false;
 	if (tearTimer) {
 		clearTimeout(tearTimer);
@@ -717,7 +1028,7 @@ onMount(() => {
 {/if}
 
 {#if festivalMode !== "none"}
-	<!-- 节日模式：默认是写着“灯笼已关”的纸片，移上去撕开露出节日按钮 -->
+	<!-- 节日模式：默认是写着"灯笼已关"的纸片，移上去撕开露出节日按钮 -->
 	<div class="lantern-control lantern-control--festival">
 		<div class="lantern-toggle-container">
 			<button
@@ -772,6 +1083,24 @@ onMount(() => {
 					alt=""
 					style={`left: ${lantern.left}; --rise-time: ${lantern.duration}; animation-delay: ${lantern.delay};`}
 				/>
+			{/each}
+		</div>
+	{/if}
+
+	<!-- 国庆花朵飘落（只有国庆模式才有） -->
+	{#if festivalMode === "national-day" && festivalFlowers.length}
+		<div class="festival-layer" aria-hidden="true">
+			{#each festivalFlowers as flower (flower.id)}
+				<div
+					class="festival-flower"
+					style={`left: ${flower.left}; --fall-time: ${flower.duration}; --sway: ${flower.sway}; animation-delay: ${flower.delay};`}
+				>
+					<img
+						src={flower.src}
+						alt=""
+						style={`--rock-time: ${flower.rockTime};`}
+					/>
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -1028,7 +1357,7 @@ onMount(() => {
 		transform: translateY(0);
 	}
 
-	/* 盖在按钮上的那张纸（默认显示“灯笼已关”） */
+	/* 盖在按钮上的那张纸（默认显示"灯笼已关"） */
 	.paper {
 		position: absolute;
 		inset: -2px;
@@ -1144,6 +1473,34 @@ onMount(() => {
 		100% { transform: translateY(-120vh); }
 	}
 
+	/* 国庆花朵：容器负责匀速下落，图片负责左右摇晃 */
+	.festival-flower {
+		position: fixed;
+		top: -80px;
+		pointer-events: none;
+		user-select: none;
+		will-change: transform;
+		animation: festival-fall var(--fall-time, 5s) linear forwards;
+	}
+
+	.festival-flower img {
+		display: block;
+		width: 48px;
+		height: auto;
+		animation: festival-rock var(--rock-time, 1.4s) ease-in-out infinite
+			alternate;
+	}
+
+	@keyframes festival-fall {
+		0% { transform: translateY(0); }
+		100% { transform: translateY(110vh); }
+	}
+
+	@keyframes festival-rock {
+		from { transform: translateX(calc(var(--sway, 0px) * -1)); }
+		to { transform: translateX(var(--sway, 0px)); }
+	}
+
 	.lantern-toast {
 		position: fixed;
 		left: 14px;
@@ -1171,6 +1528,15 @@ onMount(() => {
 		.festival-lantern {
 			animation-duration: 1ms;
 			animation-delay: 0ms !important;
+		}
+
+		.festival-flower {
+			animation-duration: 1ms;
+			animation-delay: 0ms !important;
+		}
+
+		.festival-flower img {
+			animation: none;
 		}
 	}
 
@@ -1250,6 +1616,10 @@ onMount(() => {
 		.festival-lantern {
 			bottom: -90px;
 			width: 34px;
+		}
+
+		.festival-flower img {
+			width: 36px;
 		}
 
 		.lantern-toast {

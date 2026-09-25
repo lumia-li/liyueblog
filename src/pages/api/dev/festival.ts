@@ -64,7 +64,8 @@ function parseFlagsText(text: string): FestivalFlags | null {
 function describeFlags(flags: FestivalFlags): string {
 	if (flags.midAutumn) return "开启中秋灯笼效果";
 	if (flags.newYear) return "开启新年灯笼效果";
-	return "关闭所有节日灯笼效果";
+	if (flags.nationalDay) return "开启国庆花朵效果";
+	return "关闭所有节日效果";
 }
 
 function getGithubEnv(): GithubEnv | null {

@@ -21,8 +21,10 @@ declare global {
 			duration?: number,
 			options?: {
 				force?: boolean;
-			}
+			},
 		) => boolean;
+		/** 登记“睡觉时”也要保留的看板娘台词（避免被通用睡觉文案替换） */
+		__extraSleepingWaifuMessages?: string[];
 	}
 }
 
