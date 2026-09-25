@@ -1,5 +1,5 @@
 {
-	"midAutumn": true,
+	"midAutumn": false,
 	"newYear": false,
-	"nationalDay": false
+	"nationalDay": true
 }
