@@ -3,5 +3,5 @@
 	"newYear": true,
 	"nationalDay": false,
 	"autoPlay": true,
-	"autoPlayAllPages": true
+	"autoPlayAllPages": false
 }
