@@ -2,5 +2,6 @@
 	"midAutumn": false,
 	"newYear": true,
 	"nationalDay": false,
-	"autoPlay": true
+	"autoPlay": false,
+	"autoPlayAllPages": true
 }
