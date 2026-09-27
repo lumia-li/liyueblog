@@ -4,6 +4,7 @@ import {
 	clearFestivalPreview,
 	emitFestivalSettingsChange,
 	type FestivalFlags,
+	type FestivalKey,
 	normalizeFestivalFlags,
 	readFestivalPreview,
 	writeFestivalPreview,
@@ -24,6 +25,8 @@ const BUILD_FLAGS: FestivalFlags = {
 	midAutumn: buildFlags.midAutumn,
 	newYear: buildFlags.newYear,
 	nationalDay: buildFlags.nationalDay,
+	autoPlay: buildFlags.autoPlay,
+	autoPlayAllPages: buildFlags.autoPlayAllPages,
 };
 
 let devEnabled = false;
@@ -37,13 +40,17 @@ let previewActive = false;
 $: dirty =
 	flags.midAutumn !== remoteFlags.midAutumn ||
 	flags.newYear !== remoteFlags.newYear ||
-	flags.nationalDay !== remoteFlags.nationalDay;
+	flags.nationalDay !== remoteFlags.nationalDay ||
+	flags.autoPlay !== remoteFlags.autoPlay ||
+	flags.autoPlayAllPages !== remoteFlags.autoPlayAllPages;
 
 function describeFlags(value: FestivalFlags): string {
-	if (value.midAutumn) return "中秋效果已开启";
-	if (value.newYear) return "春节效果已开启";
-	if (value.nationalDay) return "国庆效果已开启";
-	return "全部关闭";
+	let mode = "全部关闭";
+	if (value.midAutumn) mode = "中秋效果已开启";
+	else if (value.newYear) mode = "春节效果已开启";
+	else if (value.nationalDay) mode = "国庆效果已开启";
+	if (!value.autoPlay) return mode;
+	return `${mode}（自动播放：${value.autoPlayAllPages ? "所有页面" : "仅主页"}）`;
 }
 
 function refreshPreviewState() {
@@ -54,17 +61,28 @@ function setStatus(kind: StatusKind, text: string) {
 	status = { kind, text };
 }
 
-// 三个效果互斥：开启一个会自动关掉另外两个
-function toggleFestival(key: keyof FestivalFlags) {
+// 三个效果互斥：开启一个会自动关掉另外两个（自动播放是独立开关，不受影响）
+function toggleFestival(key: FestivalKey) {
 	if (flags[key]) {
-		flags = { midAutumn: false, newYear: false, nationalDay: false };
+		flags = { ...flags, midAutumn: false, newYear: false, nationalDay: false };
 		return;
 	}
 	flags = {
+		...flags,
 		midAutumn: key === "midAutumn",
 		newYear: key === "newYear",
 		nationalDay: key === "nationalDay",
 	};
+}
+
+// 进站自动播放：独立开关，随便什么时候都能拨
+function toggleAutoPlay() {
+	flags = { ...flags, autoPlay: !flags.autoPlay };
+}
+
+// 自动播放范围：关 = 只在主页播，开 = 所有页面都播
+function toggleAutoPlayAllPages() {
+	flags = { ...flags, autoPlayAllPages: !flags.autoPlayAllPages };
 }
 
 async function readResponseFlags(response: Response) {
@@ -163,7 +181,9 @@ onMount(() => {
 
 <div class="card-base festival-settings onload-animation">
 	<h2 class="festival-title">节日效果</h2>
-	<p class="festival-hint">同时只生效一个，保存后本机立即生效。</p>
+	<p class="festival-hint">
+		三个节日同时只生效一个；「进站自动播放」是独立开关，保存后本机立即生效。
+	</p>
 
 	{#if !devEnabled}
 		<p class="festival-hint">请先在「背景设置」面板输入口令解锁开发者模式。</p>
@@ -216,6 +236,44 @@ onMount(() => {
 					<span class="festival-switch-knob"></span>
 				</button>
 			</div>
+		</div>
+
+		<div class="festival-list">
+			<div class="festival-row">
+				<span class="festival-name">进站自动播放</span>
+				<button
+					type="button"
+					class="festival-switch"
+					class:is-on={flags.autoPlay}
+					role="switch"
+					aria-checked={flags.autoPlay}
+					aria-label="进站自动播放"
+					disabled={loading || saving}
+					on:click={toggleAutoPlay}
+				>
+					<span class="festival-switch-knob"></span>
+				</button>
+			</div>
+
+			<div class="festival-row">
+				<span class="festival-name">所有页面都播</span>
+				<button
+					type="button"
+					class="festival-switch"
+					class:is-on={flags.autoPlayAllPages}
+					role="switch"
+					aria-checked={flags.autoPlayAllPages}
+					aria-label="所有页面都自动播放"
+					disabled={loading || saving || !flags.autoPlay}
+					on:click={toggleAutoPlayAllPages}
+				>
+					<span class="festival-switch-knob"></span>
+				</button>
+			</div>
+
+			<p class="festival-hint">
+				关掉「所有页面都播」时，只有主页进站会自动播放（春节这类全站挂灯笼的效果建议打开）。
+			</p>
 		</div>
 
 		<div class="festival-actions">

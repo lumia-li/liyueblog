@@ -62,10 +62,12 @@ function parseFlagsText(text: string): FestivalFlags | null {
 }
 
 function describeFlags(flags: FestivalFlags): string {
-	if (flags.midAutumn) return "开启中秋灯笼效果";
-	if (flags.newYear) return "开启新年灯笼效果";
-	if (flags.nationalDay) return "开启国庆花朵效果";
-	return "关闭所有节日效果";
+	let mode = "关闭所有节日效果";
+	if (flags.midAutumn) mode = "开启中秋灯笼效果";
+	else if (flags.newYear) mode = "开启新年灯笼效果";
+	else if (flags.nationalDay) mode = "开启国庆花朵效果";
+	if (!flags.autoPlay) return mode;
+	return `${mode}（自动播放：${flags.autoPlayAllPages ? "所有页面" : "仅主页"}）`;
 }
 
 function getGithubEnv(): GithubEnv | null {
@@ -275,6 +277,9 @@ export const POST: APIRoute = async ({ request }) => {
 	let body: {
 		midAutumn?: unknown;
 		newYear?: unknown;
+		nationalDay?: unknown;
+		autoPlay?: unknown;
+		autoPlayAllPages?: unknown;
 		devCode?: unknown;
 		devCodeHash?: unknown;
 	};
@@ -288,7 +293,8 @@ export const POST: APIRoute = async ({ request }) => {
 	if (!flags) {
 		return json(400, {
 			ok: false,
-			message: "缺少 midAutumn / newYear 布尔值",
+			message:
+				"缺少 midAutumn / newYear 布尔值（nationalDay、autoPlay 缺省按关闭处理）",
 		});
 	}
 

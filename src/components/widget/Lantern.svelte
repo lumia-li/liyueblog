@@ -48,6 +48,8 @@ const BUILD_FESTIVAL_FLAGS: FestivalFlags = {
 	midAutumn: festivalConfig.midAutumn,
 	newYear: festivalConfig.newYear,
 	nationalDay: festivalConfig.nationalDay,
+	autoPlay: festivalConfig.autoPlay,
+	autoPlayAllPages: festivalConfig.autoPlayAllPages,
 };
 
 let festivalMode: FestivalMode = resolveFestivalMode(BUILD_FESTIVAL_FLAGS);
@@ -106,8 +108,8 @@ const NATIONAL_DAY_FLOWERS = [
 	"/images/national-day-flower-yellow.svg",
 	"/images/national-day-flower-orange.svg",
 ];
-const NATIONAL_DAY_FLOWER_COUNT_DESKTOP = 30;
-const NATIONAL_DAY_FLOWER_COUNT_MOBILE = 18;
+const NATIONAL_DAY_FLOWER_COUNT_DESKTOP = 48;
+const NATIONAL_DAY_FLOWER_COUNT_MOBILE = 28;
 // 横向槽位数量：每轮洗牌后依次占用，保证分布均匀
 const NATIONAL_DAY_SLOT_COUNT = 16;
 const NATIONAL_DAY_SPAWN_MIN_MS = 40;
@@ -256,6 +258,13 @@ let festivalTimer: ReturnType<typeof setTimeout> | null = null;
 let festivalMessageCursor = 0;
 let festivalLanternSeed = 0;
 let festivalFlowerSeed = 0;
+
+// 进站自动播放：配置里打开 autoPlay 时，进站后自动触发一次当前节日效果
+const FESTIVAL_AUTOPLAY_DELAY_MS = 900;
+let festivalAutoPlayEnabled = false;
+// 自动播放的页面范围：是否任何页面都播（false = 只在主页播）
+let festivalAutoPlayAllPages = false;
+let festivalAutoPlayTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 原彩蛋模式状态
 let offsetX = 0;
@@ -910,16 +919,58 @@ function initControlPosition() {
 	});
 }
 
+// 当前是不是主页（含主页分页 /2、/3…）：进站自动播放只在这里生效
+function isHomePage(): boolean {
+	if (typeof window === "undefined") return false;
+	// BASE_URL 形如 "/" 或 "/blog/"，去掉尾部斜杠后当作前缀
+	const base = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+	const relative = window.location.pathname
+		.replace(/\/+$/, "")
+		.slice(base.length);
+	// 主页本身（"" 或 "/"）以及主页分页（/2、/3）
+	return relative === "" || relative === "/" || /^\/\d+$/.test(relative);
+}
+
+// 进站自动播放：自动播放开关打开时，进站（或控制台改完配置）就自动触发一次节日效果
+function scheduleFestivalAutoPlay() {
+	if (festivalAutoPlayTimer) {
+		clearTimeout(festivalAutoPlayTimer);
+		festivalAutoPlayTimer = null;
+	}
+	if (!festivalAutoPlayEnabled || festivalMode === "none") return;
+	// 默认只在主页自动播放：文章、归档等页面进站不自动出现效果
+	// 开了「所有页面都播」后，任何页面进站都自动播（春节这类全站效果用得上）
+	if (!festivalAutoPlayAllPages && !isHomePage()) return;
+	festivalAutoPlayTimer = setTimeout(() => {
+		festivalAutoPlayTimer = null;
+		triggerFestival();
+	}, FESTIVAL_AUTOPLAY_DELAY_MS);
+}
+
 /**
  * 计算当前该用哪种节日模式：构建期配置优先被「本机即时预览」覆盖
  */
 function applyFestivalMode() {
-	const next = resolveFestivalMode(resolveFestivalFlags(BUILD_FESTIVAL_FLAGS));
-	if (next === festivalMode) return;
-	resetFestivalState();
-	festivalMode = next;
-	if (next === "none") {
-		initControlPosition();
+	const flags = resolveFestivalFlags(BUILD_FESTIVAL_FLAGS);
+	const next = resolveFestivalMode(flags);
+	const modeChanged = next !== festivalMode;
+	const autoPlayChanged =
+		flags.autoPlay !== festivalAutoPlayEnabled ||
+		flags.autoPlayAllPages !== festivalAutoPlayAllPages;
+	festivalAutoPlayEnabled = flags.autoPlay;
+	festivalAutoPlayAllPages = flags.autoPlayAllPages;
+
+	if (modeChanged) {
+		resetFestivalState();
+		festivalMode = next;
+		if (next === "none") {
+			initControlPosition();
+		}
+	}
+
+	// 换了节日、或只是把自动播放开关拨了，都重新安排一次自动播放
+	if (modeChanged || autoPlayChanged) {
+		scheduleFestivalAutoPlay();
 	}
 }
 
@@ -944,6 +995,11 @@ onMount(() => {
 
 	if (festivalMode === "none") {
 		initControlPosition();
+	}
+
+	// 进站自动播放：首屏也自动播一次（applyFestivalMode 已经安排过就不重复）
+	if (!festivalAutoPlayTimer) {
+		scheduleFestivalAutoPlay();
 	}
 
 	// 控制台保存后广播事件，这里立刻切到新效果
@@ -971,6 +1027,10 @@ onMount(() => {
 		if (festivalTimer) {
 			clearTimeout(festivalTimer);
 			festivalTimer = null;
+		}
+		if (festivalAutoPlayTimer) {
+			clearTimeout(festivalAutoPlayTimer);
+			festivalAutoPlayTimer = null;
 		}
 	};
 });

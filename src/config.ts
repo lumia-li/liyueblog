@@ -59,8 +59,6 @@ export const siteConfig: SiteConfig = {
 export const navBarConfig: NavBarConfig = {
 	links: [
 		LinkPreset.Home,
-		LinkPreset.Archive,
-		LinkPreset.About,
 		{
 			name: "随笔",
 			url: "/thoughts/",
@@ -69,6 +67,7 @@ export const navBarConfig: NavBarConfig = {
 			name: "友链",
 			url: "/friends/",
 		},
+		LinkPreset.Archive,
 		{
 			name: "统计",
 			url: "https://u.liyueovo.top/share/BNQHKRVIrz8MsQiu", // Internal links should not include the base path, as it is automatically added
