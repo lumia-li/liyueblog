@@ -1,7 +1,7 @@
 {
 	"midAutumn": false,
-	"newYear": true,
-	"nationalDay": false,
+	"newYear": false,
+	"nationalDay": true,
 	"autoPlay": true,
 	"autoPlayAllPages": false
 }
