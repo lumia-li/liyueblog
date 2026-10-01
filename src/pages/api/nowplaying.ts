@@ -5,8 +5,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { matchDevCredential } from "@utils/dev-auth-server";
-import { getGithubEnv, readRepoFile, writeRepoFile } from "@utils/github-repo";
 import {
+	ensureRepoBranch,
+	getGithubEnv,
+	readRepoFile,
+	writeRepoFile,
+} from "@utils/github-repo";
+import {
+	NOWPLAYING_STATE_REPO_BRANCH,
 	NOWPLAYING_STATE_REPO_PATH,
 	describeNowPlayingState,
 	type NowPlayingState,
@@ -68,7 +74,11 @@ async function readCurrentState(): Promise<NowPlayingState> {
 		return readLocalState();
 	}
 
-	const file = await readRepoFile(env, NOWPLAYING_STATE_REPO_PATH);
+	const file = await readRepoFile(
+		env,
+		NOWPLAYING_STATE_REPO_PATH,
+		NOWPLAYING_STATE_REPO_BRANCH,
+	);
 	return file ? parseNowPlayingState(file.content) : emptyNowPlayingState();
 }
 
@@ -147,16 +157,29 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 		}
 
-		const existing = await readRepoFile(env, NOWPLAYING_STATE_REPO_PATH);
+		// 状态放在独立分支：提交不会出现在 main 上，也就不会触发重新部署
+		await ensureRepoBranch(env, NOWPLAYING_STATE_REPO_BRANCH);
+
+		const existing = await readRepoFile(
+			env,
+			NOWPLAYING_STATE_REPO_PATH,
+			NOWPLAYING_STATE_REPO_BRANCH,
+		);
 		const commitUrl = await writeRepoFile({
 			env,
 			path: NOWPLAYING_STATE_REPO_PATH,
 			content,
 			commitMessage: `chore(nowplaying): ${describeNowPlayingState(state)}`,
 			sha: existing?.sha,
+			ref: NOWPLAYING_STATE_REPO_BRANCH,
 		});
 
-		return json(200, { ok: true, state, source: "github", commitUrl });
+		return json(200, {
+			ok: true,
+			state,
+			source: `github:${NOWPLAYING_STATE_REPO_BRANCH}`,
+			commitUrl,
+		});
 	} catch (error) {
 		return json(500, { ok: false, message: errorMessage(error) });
 	}

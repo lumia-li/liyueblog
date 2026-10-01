@@ -22,6 +22,12 @@ export type NowPlayingState = {
 /** 仓库里「正在播放」状态文件的位置（接口写入 + 构建期兜底读取都用它） */
 export const NOWPLAYING_STATE_REPO_PATH = "src/data/now-playing.json";
 
+/**
+ * 状态文件存放的分支：独立分支上的提交不会影响默认分支，
+ * 因此播放上报再频繁也不会触发重新部署。
+ */
+export const NOWPLAYING_STATE_REPO_BRANCH = "nowplaying";
+
 function asString(value: unknown, maxLength = 200): string {
 	return typeof value === "string" ? value.slice(0, maxLength).trim() : "";
 }
