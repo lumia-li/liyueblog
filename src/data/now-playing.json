@@ -1,9 +1,9 @@
 {
-	"title": "Whispering Waters",
-	"artist": "Tenno",
-	"isPlaying": true,
-	"positionMs": 5639,
-	"durationMs": 163236,
+	"title": "分支切换自检",
+	"artist": "MusicBar",
+	"isPlaying": false,
+	"positionMs": 0,
+	"durationMs": 0,
 	"coverUrl": "",
-	"updatedAt": "2026-10-01T07:48:37.8351998Z"
+	"updatedAt": "2026-10-01T08:00:00.000Z"
 }
