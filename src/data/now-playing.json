@@ -1,9 +1,9 @@
 {
-	"title": "",
-	"artist": "",
-	"isPlaying": false,
-	"positionMs": 0,
-	"durationMs": 0,
+	"title": "Whispering Waters",
+	"artist": "Tenno",
+	"isPlaying": true,
+	"positionMs": 5576,
+	"durationMs": 163236,
 	"coverUrl": "",
-	"updatedAt": "2026-10-01T07:48:07.7764523Z"
+	"updatedAt": "2026-10-01T07:48:34.5733189Z"
 }
