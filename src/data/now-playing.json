@@ -1,9 +1,9 @@
 {
-	"title": "UA测试",
-	"artist": "MusicBar-NowPlaying",
+	"title": "",
+	"artist": "",
 	"isPlaying": false,
 	"positionMs": 0,
 	"durationMs": 0,
 	"coverUrl": "",
-	"updatedAt": "2026-10-01T08:30:00.000Z"
+	"updatedAt": "2026-10-01T07:48:07.7764523Z"
 }
