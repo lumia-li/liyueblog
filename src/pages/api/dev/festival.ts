@@ -280,6 +280,7 @@ export const POST: APIRoute = async ({ request }) => {
 		nationalDay?: unknown;
 		autoPlay?: unknown;
 		autoPlayAllPages?: unknown;
+		autoSchedule?: unknown;
 		devCode?: unknown;
 		devCodeHash?: unknown;
 	};

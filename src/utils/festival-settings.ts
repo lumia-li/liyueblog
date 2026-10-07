@@ -10,9 +10,11 @@ export type FestivalFlags = {
 	autoPlay: boolean;
 	/** 自动播放的页面范围：false = 只在主页，true = 任何页面进站都播 */
 	autoPlayAllPages: boolean;
+	/** 按真实日历到点自动开关节日（由 GitHub 定时任务执行，见 scripts/festival-schedule.mjs） */
+	autoSchedule: boolean;
 };
 
-/** 三个互斥的节日开关（autoPlay / autoPlayAllPages 是独立开关，不参与互斥） */
+/** 三个互斥的节日开关（其余都是独立开关，不参与互斥） */
 export type FestivalKey = "midAutumn" | "newYear" | "nationalDay";
 
 /** 全部配置字段：用于「按字段合并」与「整体比较」，新增字段时只改这一处 */
@@ -22,6 +24,7 @@ const FESTIVAL_FLAG_KEYS: readonly (keyof FestivalFlags)[] = [
 	"nationalDay",
 	"autoPlay",
 	"autoPlayAllPages",
+	"autoSchedule",
 ];
 
 export type FestivalMode = "mid-autumn" | "new-year" | "national-day" | "none";
@@ -67,17 +70,20 @@ export function normalizeFestivalFlags(value: unknown): FestivalFlags | null {
 		nationalDay?: unknown;
 		autoPlay?: unknown;
 		autoPlayAllPages?: unknown;
+		autoSchedule?: unknown;
 	};
 	if (typeof raw.midAutumn !== "boolean" || typeof raw.newYear !== "boolean") {
 		return null;
 	}
 	// 国庆、自动播放、自动播放范围都是后加的字段：老配置里没有时按关闭处理
+	// autoSchedule 例外：缺省视为开启，免得旧请求把「日历自动开关」悄悄关掉
 	return {
 		midAutumn: raw.midAutumn,
 		newYear: raw.newYear,
 		nationalDay: raw.nationalDay === true,
 		autoPlay: raw.autoPlay === true,
 		autoPlayAllPages: raw.autoPlayAllPages === true,
+		autoSchedule: raw.autoSchedule !== false,
 	};
 }
 

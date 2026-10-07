@@ -27,6 +27,7 @@ const BUILD_FLAGS: FestivalFlags = {
 	nationalDay: buildFlags.nationalDay,
 	autoPlay: buildFlags.autoPlay,
 	autoPlayAllPages: buildFlags.autoPlayAllPages,
+	autoSchedule: buildFlags.autoSchedule,
 };
 
 let devEnabled = false;
@@ -42,7 +43,8 @@ $: dirty =
 	flags.newYear !== remoteFlags.newYear ||
 	flags.nationalDay !== remoteFlags.nationalDay ||
 	flags.autoPlay !== remoteFlags.autoPlay ||
-	flags.autoPlayAllPages !== remoteFlags.autoPlayAllPages;
+	flags.autoPlayAllPages !== remoteFlags.autoPlayAllPages ||
+	flags.autoSchedule !== remoteFlags.autoSchedule;
 
 function describeFlags(value: FestivalFlags): string {
 	let mode = "全部关闭";
@@ -83,6 +85,11 @@ function toggleAutoPlay() {
 // 自动播放范围：关 = 只在主页播，开 = 所有页面都播
 function toggleAutoPlayAllPages() {
 	flags = { ...flags, autoPlayAllPages: !flags.autoPlayAllPages };
+}
+
+// 按真实日历到点自动开关节日（GitHub 每天定时执行，会提交并触发部署）
+function toggleAutoSchedule() {
+	flags = { ...flags, autoSchedule: !flags.autoSchedule };
 }
 
 async function readResponseFlags(response: Response) {
@@ -271,8 +278,27 @@ onMount(() => {
 				</button>
 			</div>
 
+			<div class="festival-row">
+				<span class="festival-name">按日历自动开关</span>
+				<button
+					type="button"
+					class="festival-switch"
+					class:is-on={flags.autoSchedule}
+					role="switch"
+					aria-checked={flags.autoSchedule}
+					aria-label="按日历自动开关节日"
+					disabled={loading || saving}
+					on:click={toggleAutoSchedule}
+				>
+					<span class="festival-switch-knob"></span>
+				</button>
+			</div>
+
 			<p class="festival-hint">
 				关掉「所有页面都播」时，只有主页进站会自动播放（春节这类全站挂灯笼的效果建议打开）。
+			</p>
+			<p class="festival-hint">
+				「按日历自动开关」由 GitHub 每天 08:05 检查：中秋/国庆/春节到点自动开启并部署，节日窗口过后自动关闭。
 			</p>
 		</div>
 

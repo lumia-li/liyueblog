@@ -50,6 +50,7 @@ const BUILD_FESTIVAL_FLAGS: FestivalFlags = {
 	nationalDay: festivalConfig.nationalDay,
 	autoPlay: festivalConfig.autoPlay,
 	autoPlayAllPages: festivalConfig.autoPlayAllPages,
+	autoSchedule: festivalConfig.autoSchedule,
 };
 
 let festivalMode: FestivalMode = resolveFestivalMode(BUILD_FESTIVAL_FLAGS);
