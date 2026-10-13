@@ -10,6 +10,9 @@ import fa_xmark from "@fortawesome/fontawesome-free/svgs/solid/xmark.svg";
 
 import showMessage, { isWaifuMuted, toggleWaifuMuted } from "./message.js";
 
+// 左右双箭头：调整看板娘在面板中的水平位置（面板与滑块的交互见 positionControl.js）
+const position_icon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12 8 6v3.5h8V6l6 6-6 6v-3.5H8V18Z"/></svg>`;
+
 function showHitokoto() {
     fetch("https://v1.hitokoto.cn")
         .then(response => response.json())
@@ -85,6 +88,10 @@ const tools = {
         icon: fa_camera_retro,
         callback: () => {
             showMessage("Photo captured.", 6000, 9);
+            // Cubism 5 模型由 pixi 渲染，截图走 waifuCapturePhoto 钩子
+            if (typeof window.waifuCapturePhoto === "function" && window.waifuCapturePhoto()) {
+                return;
+            }
             Live2D.captureName = "photo.png";
             Live2D.captureFrame = true;
         }
@@ -110,6 +117,11 @@ const tools = {
         mounted: element => {
             syncMuteButton(element);
         }
+    },
+    "position": {
+        icon: position_icon,
+        // 回调由 index.js 注入（需要拿到模型实例才能改水平位置）
+        callback: () => {}
     },
     "quit": {
         icon: fa_xmark,

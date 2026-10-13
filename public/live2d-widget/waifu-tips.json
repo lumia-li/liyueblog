@@ -1,7 +1,7 @@
 {
 	"mouseover": [
 		{
-			"selector": "#live2d",
+			"selector": "#live2d, #live2d-cubism5",
 			"text": [
 				"干嘛呢你，快把手拿开~~",
 				"鼠…鼠标放错地方了！",
@@ -331,7 +331,7 @@
 	],
 	"click": [
 		{
-			"selector": "#live2d",
+			"selector": "#live2d, #live2d-cubism5",
 			"text": [
 				"是…是不小心碰到了吧…",
 				"萝莉控是什么呀？",

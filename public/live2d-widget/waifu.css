@@ -67,15 +67,127 @@
 	color: var(--primary, #0099cc);
 }
 
-#live2d {
-	cursor: grab;
+#live2d-stage {
 	height: 300px;
 	position: relative;
 	width: 300px;
 }
 
-#live2d:active {
+#live2d-stage > canvas {
+	cursor: grab;
+	display: block;
+	height: 100%;
+	left: 0;
+	position: absolute;
+	top: 0;
+	width: 100%;
+	/* 触屏长按聚焦环时，别让系统弹出「保存图片 / 选中文字」气泡 */
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+#live2d-stage > canvas:active {
 	cursor: grabbing;
+}
+
+/*
+ * 放大镜（Cubism 5 模型专用）：鼠标中键点她的头会弹出聚焦环，
+ * 环里是放大的脸部特写，方便看清表情。left/top 由 JS 按头部位置计算。
+ */
+#live2d-magnifier {
+	/* 实际尺寸由 JS 按 LENS_SIZE 写入，这里只是兜底 */
+	height: 156px;
+	opacity: 0;
+	pointer-events: none;
+	position: absolute;
+	transform: translate(-50%, -50%) scale(.72);
+	transition: opacity .12s ease, transform .16s cubic-bezier(.22, 1.2, .36, 1);
+	width: 156px;
+	z-index: 3;
+}
+
+#live2d-magnifier[data-open="1"] {
+	opacity: 1;
+	transform: translate(-50%, -50%) scale(1);
+}
+
+#live2d-magnifier > #live2d-lens {
+	border-radius: 50%;
+	box-shadow: 0 10px 24px rgba(7, 14, 26, .42), inset 0 0 0 1px rgba(167, 188, 214, .35);
+	display: block;
+	height: 100%;
+	width: 100%;
+}
+
+/* 放大镜里的气泡文字 */
+#live2d-magnifier-hints {
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+}
+
+#live2d-magnifier-hints span {
+	animation: live2d-magnifier-bubble 2s ease-out forwards;
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	/* 深色模式：深色玻璃气泡 */
+	background: rgba(15, 24, 39, .8);
+	border: 1px solid rgba(167, 188, 214, .3);
+	border-radius: 999px;
+	box-shadow: 0 4px 12px rgba(7, 14, 26, .35);
+	color: #e8f2ff;
+	font-size: 12px;
+	line-height: 1;
+	padding: 4px 9px;
+	position: absolute;
+	white-space: nowrap;
+}
+
+/* 浅色模式：换成浅色玻璃气泡 + 深色文字（主题类名由站点的 LightDarkSwitch 加在 <html> 上） */
+html:not(.dark) #live2d-magnifier-hints span {
+	background: rgba(255, 255, 255, .9);
+	border-color: rgba(15, 23, 42, .12);
+	box-shadow: 0 4px 12px rgba(15, 23, 42, .14);
+	color: #3f4a5c;
+}
+
+@keyframes live2d-magnifier-bubble {
+	0% {
+		opacity: 0;
+		transform: translate(-50%, 4px) scale(.82) rotate(var(--tilt, 0deg));
+	}
+	20% {
+		opacity: 1;
+		transform: translate(-50%, -6px) scale(1) rotate(var(--tilt, 0deg));
+	}
+	70% {
+		opacity: 1;
+		transform: translate(-50%, -16px) scale(1) rotate(var(--tilt, 0deg));
+	}
+	100% {
+		opacity: 0;
+		transform: translate(-50%, -32px) scale(.94) rotate(var(--tilt, 0deg));
+	}
+}
+
+/* 聚焦环本体 */
+#live2d-magnifier::after {
+	border: 2px solid rgba(158, 190, 226, .85);
+	border-radius: 50%;
+	box-shadow:
+		0 0 0 4px rgba(126, 162, 202, .14),
+		0 0 16px rgba(126, 162, 202, .5),
+		inset 0 0 14px rgba(126, 162, 202, .3);
+	content: "";
+	inset: -6px;
+	position: absolute;
+}
+
+/* 同一时刻只有一个渲染内核可见：cubism2 = live2d.min.js，cubism5 = pixi + Cubism Core 5 */
+#live2d-stage[data-renderer="cubism2"] > #live2d-cubism5,
+#live2d-stage[data-renderer="cubism5"] > #live2d {
+	visibility: hidden;
 }
 
 #waifu-tool {
@@ -88,7 +200,7 @@
 	box-shadow: 0 12px 28px rgba(7, 14, 26, .35);
 	color: #aac0de;
 	display: flex;
-	gap: 4px;
+	gap: 3px;
 	left: calc(50% + 8px);
 	opacity: 0;
 	padding: 7px 8px;
@@ -135,11 +247,12 @@
 	align-items: center;
 	border-radius: 50%;
 	display: inline-flex;
-	height: 30px;
+	/* 30 → 28：多加了「位置」按钮，收窄一点让底部这一排整体宽度和以前持平 */
+	height: 28px;
 	justify-content: center;
 	text-align: center;
 	transition: background-color .2s ease, transform .2s ease;
-	width: 30px;
+	width: 28px;
 }
 
 #waifu-tool span:hover {
@@ -176,6 +289,141 @@
 
 #waifu-tool-placement:hover {
 	color: #e8f2ff;
+}
+
+/* 工具栏按钮的开启态（目前用于「位置」） */
+#waifu-tool span[data-active="true"] {
+	background-color: rgba(126, 162, 202, .32);
+}
+
+#waifu-tool span[data-active="true"] svg {
+	fill: #e8f2ff;
+}
+
+/*
+ * 位置调节面板：工具栏上方的小滑块，用来左右挪动看板娘。
+ * 交互见 src/positionControl.js，默认收起、点「位置」按钮才展开。
+ */
+#waifu-offset {
+	align-items: center;
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	background: rgba(15, 24, 39, .78);
+	border: 1px solid rgba(167, 188, 214, .28);
+	border-radius: 16px;
+	bottom: 56px;
+	box-shadow: 0 12px 28px rgba(7, 14, 26, .35);
+	color: #aac0de;
+	display: flex;
+	font-size: 12px;
+	gap: 8px;
+	left: calc(50% + 8px);
+	/* #waifu 上是 line-height: 0，面板里的文字要还原行高 */
+	line-height: 1.2;
+	opacity: 0;
+	padding: 8px 10px;
+	pointer-events: none;
+	position: absolute;
+	transform: translate(-50%, 8px);
+	transition: opacity .2s ease, transform .2s ease;
+	width: 234px;
+	z-index: 5;
+}
+
+#waifu-offset[data-open="1"] {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translate(-50%, 0);
+}
+
+#waifu-offset-icon {
+	color: #93a8c5;
+	font-size: 15px;
+	line-height: 1;
+}
+
+#waifu-offset input[type="range"] {
+	-webkit-appearance: none;
+	appearance: none;
+	background: transparent;
+	cursor: pointer;
+	flex: 1;
+	height: 18px;
+	margin: 0;
+	min-width: 0;
+	/* 触屏拖滑块时不要让页面跟着上下滚 */
+	touch-action: none;
+}
+
+#waifu-offset input[type="range"]::-webkit-slider-runnable-track {
+	background: rgba(167, 188, 214, .26);
+	border-radius: 999px;
+	height: 4px;
+}
+
+#waifu-offset input[type="range"]::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	background: #e8f2ff;
+	border-radius: 50%;
+	box-shadow: 0 1px 4px rgba(7, 14, 26, .5);
+	height: 14px;
+	margin-top: -5px;
+	width: 14px;
+}
+
+#waifu-offset input[type="range"]::-moz-range-track {
+	background: rgba(167, 188, 214, .26);
+	border-radius: 999px;
+	height: 4px;
+}
+
+#waifu-offset input[type="range"]::-moz-range-thumb {
+	background: #e8f2ff;
+	border: none;
+	border-radius: 50%;
+	height: 14px;
+	width: 14px;
+}
+
+#waifu-offset-value {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	white-space: nowrap;
+	width: 42px;
+}
+
+#waifu-offset-reset {
+	color: #93a8c5;
+	cursor: pointer;
+	font-size: 15px;
+	line-height: 1;
+	transition: color .2s ease;
+}
+
+#waifu-offset-reset:hover,
+#waifu-offset-reset:focus-visible {
+	color: #e8f2ff;
+}
+
+/*
+ * 工具栏切到「侧边竖排」时，面板改贴到竖排工具栏的对侧并垂直居中，
+ * 免得和按钮列叠在一起（data-side 表示工具栏贴面板哪一侧，见 Layout.astro）。
+ * 竖排工具栏自身宽约 44px + 10px 边距，面板 234px 宽贴 8px 内边刚好不撞上。
+ */
+#waifu-tool[data-placement="right"]:not([data-side="left"]) ~ #waifu-offset {
+	bottom: auto;
+	left: 8px;
+	top: 50%;
+	transform: translate(0, -50%);
+}
+
+#waifu-tool[data-placement="right"][data-side="left"] ~ #waifu-offset {
+	bottom: auto;
+	left: auto;
+	right: 8px;
+	top: 50%;
+	transform: translate(0, -50%);
 }
 
 @keyframes shake {

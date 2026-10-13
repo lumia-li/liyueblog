@@ -963,7 +963,7 @@ const homeBannerHeight = "56vh";
 		<script defer src="https://u.liyueovo.top/script.js" data-website-id="a9f4f1e3-607d-430e-842f-eb9e6e65aca4"></script>
 
 		<link rel="alternate" type="application/rss+xml" title={profileConfig.name} href={`${Astro.site}rss.xml`}/>
-		<link rel="stylesheet" href={url("/live2d-widget/waifu.css?v=20260313-1")} />
+		<link rel="stylesheet" href={url("/live2d-widget/waifu.css?v=20261013-5")} />
 
 	</head>
 	<body class=" min-h-screen transition " class:list={[{"lg:is-home": isHomePage, "enable-banner": enableBanner}]}
@@ -983,8 +983,10 @@ const homeBannerHeight = "56vh";
 			// @ts-nocheck
 			// live2d_path 模型资源路径
 			const live2d_path = "/live2d-widget/";
-			const live2d_asset_version = "20260313-2";
+			const live2d_asset_version = "20261013-6";
 			const live2d_asset = (path: string) => `${live2d_path}${path}?v=${live2d_asset_version}`;
+			// 模型清单版本号缓存键，见 model/model_list.json 的 version 字段
+			const live2dModelListVersionKey = "live2d-model-list-version";
 
 			// 加载外部资源的方法
 			function loadExternalResource(url, type) {
@@ -1032,12 +1034,30 @@ const homeBannerHeight = "56vh";
 						throw new Error("Model list is empty");
 					}
 
+					// 模型清单版本变化时（例如新增了模型）重置一次选择，
+					// 保证新加入的模型不会因为旧缓存而被一直跳过。
+					const listVersion = String(modelList?.version ?? "");
+					const storedVersion = localStorage.getItem(live2dModelListVersionKey);
+					const shouldResetSelection = listVersion !== "" && storedVersion !== listVersion;
+					localStorage.setItem(live2dModelListVersionKey, listVersion);
+
+					const getModelName = (model) => (Array.isArray(model) ? model[0] : model);
+					const defaultModelId = (() => {
+						const defaultModelName = modelList?.defaultModel;
+						if (typeof defaultModelName !== "string") {
+							return 0;
+						}
+						const index = models.findIndex(model => getModelName(model) === defaultModelName);
+						return index >= 0 ? index : 0;
+					})();
+
 					if (
+						shouldResetSelection ||
 						nextModelId === null ||
 						nextModelId < 0 ||
 						nextModelId >= models.length
 					) {
-						nextModelId = 0;
+						nextModelId = defaultModelId;
 					}
 
 					const selectedModel = models[nextModelId];
@@ -1077,12 +1097,17 @@ const homeBannerHeight = "56vh";
 						waifuPath: live2d_asset("waifu-tips.json"),
 						modelsPath: live2d_path + "model",
 						modelListPath: live2d_asset("model/model_list.json"),
-						tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "mute", "quit"]
+						// Cubism 5（moc3）模型的内核脚本目录
+						vendorPath: live2d_path + "vendor/",
+						assetVersion: live2d_asset_version,
+						tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "mute", "position", "quit"]
 					});
 
                     const initWaifuInteractions = () => {
                         const waifuElement = document.getElementById("waifu");
-                        const live2dElement = document.getElementById("live2d");
+                        // 两种渲染内核（Cubism 2 / Cubism 5）的画布都放在 #live2d-stage 里，
+                        // 交互统一绑定在外层容器上。
+                        const live2dElement = document.getElementById("live2d-stage");
                         if (!waifuElement || !live2dElement) {
                             return false;
                         }
@@ -1598,7 +1623,7 @@ const homeBannerHeight = "56vh";
 	                        let lastSleepHoverAt = 0;
 	                        const isOnLive2dElement = (event: Event) => {
 	                            const target = event.target;
-	                            return target instanceof Element && Boolean(target.closest("#live2d"));
+	                            return target instanceof Element && Boolean(target.closest("#live2d-stage"));
 	                        };
 	                        const showSleepingHoverMessage = () => {
 	                            const now = Date.now();

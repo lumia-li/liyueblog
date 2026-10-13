@@ -3,14 +3,27 @@ import showMessage from "./message.js";
 import randomSelection from "./utils.js";
 import tools from "./tools.js";
 import LocalModel from "./localModel.js";
+import createPositionControl from "./positionControl.js";
 
 function loadWidget(config) {
     const model = config.isLocalModel ? new LocalModel(config) : new Model(config);
+    // 「位置」工具的回调需要模型实例，只能在这里注入；
+    // 远端模型（非本地）没有左右移动能力，就不注册这个按钮
+    const positionControl = typeof model.setHorizontalOffset === "function"
+        ? createPositionControl(model)
+        : null;
     localStorage.removeItem("waifu-display");
     sessionStorage.removeItem("waifu-text");
     document.body.insertAdjacentHTML("beforeend", `<div id="waifu">
             <div id="waifu-tips"></div>
-            <canvas id="live2d" width="800" height="800"></canvas>
+            <div id="live2d-stage" data-renderer="cubism2">
+                <canvas id="live2d" width="800" height="800"></canvas>
+                <canvas id="live2d-cubism5"></canvas>
+                <div id="live2d-magnifier" data-open="0">
+                    <canvas id="live2d-lens"></canvas>
+                    <div id="live2d-magnifier-hints"></div>
+                </div>
+            </div>
             <div id="waifu-tool"></div>
         </div>`);
     // https://stackoverflow.com/questions/24148403/trigger-css-transition-on-appended-element
@@ -21,8 +34,12 @@ function loadWidget(config) {
     (function registerTools() {
         tools["switch-model"].callback = () => model.loadOtherModel();
         tools["switch-texture"].callback = () => model.loadRandModel();
+        tools["position"].callback = () => positionControl?.toggle();
         if (!Array.isArray(config.tools)) {
             config.tools = Object.keys(tools);
+        }
+        if (!positionControl) {
+            config.tools = config.tools.filter(tool => tool !== "position");
         }
         for (let tool of config.tools) {
             if (tools[tool]) {
