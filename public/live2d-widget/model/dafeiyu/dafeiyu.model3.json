@@ -1,0 +1,124 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "dafeiyu.moc3",
+		"Textures": [
+			"texture_00.png"
+		],
+		"Physics": "dafeiyu.physics3.json",
+		"DisplayInfo": "dafeiyu.cdi3.json",
+		"Expressions": [
+			{
+				"Name": "1 口型切换",
+				"File": "exp/exp01.exp3.json"
+			},
+			{
+				"Name": "2 三嘴",
+				"File": "exp/exp02.exp3.json"
+			},
+			{
+				"Name": "2 龇牙",
+				"File": "exp/exp03.exp3.json"
+			},
+			{
+				"Name": "3 脸黑",
+				"File": "exp/exp04.exp3.json"
+			},
+			{
+				"Name": "4 脸红",
+				"File": "exp/exp05.exp3.json"
+			},
+			{
+				"Name": "5 ><",
+				"File": "exp/exp06.exp3.json"
+			},
+			{
+				"Name": "5 O O",
+				"File": "exp/exp07.exp3.json"
+			},
+			{
+				"Name": "6 X X",
+				"File": "exp/exp08.exp3.json"
+			},
+			{
+				"Name": "7 流口水",
+				"File": "exp/exp09.exp3.json"
+			},
+			{
+				"Name": "8 担心嘴",
+				"File": "exp/exp10.exp3.json"
+			},
+			{
+				"Name": "8 栗子嘴",
+				"File": "exp/exp11.exp3.json"
+			},
+			{
+				"Name": "8 O嘴",
+				"File": "exp/exp12.exp3.json"
+			},
+			{
+				"Name": "尾巴消失",
+				"File": "exp/exp13.exp3.json"
+			},
+			{
+				"Name": "耳朵消失",
+				"File": "exp/exp14.exp3.json"
+			},
+			{
+				"Name": "水印消除",
+				"File": "exp/exp15.exp3.json"
+			}
+		]
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": [
+				"ParamMouthOpenY"
+			]
+		}
+	],
+	"WidgetConfig": {
+		"PersistentParameters": {
+			"Paramcol_3": 1
+		},
+		"ExpressionCycle": [
+			null,
+			"4 脸红",
+			"5 ><",
+			"5 O O",
+			"6 X X",
+			"8 栗子嘴",
+			"8 O嘴",
+			"2 龇牙",
+			"3 脸黑",
+			"7 流口水",
+			"1 口型切换"
+		],
+		"ExpressionMessages": [
+			"呼……恢复平常的样子啦。",
+			"脸、脸红什么的最讨厌了……",
+			"哼！不给你看，我闭眼啦。",
+			"哇，看到什么好吃的东西了嘛？",
+			"被你看晕了，脑袋上都冒星星了。",
+			"这个表情……可爱吧？",
+			"张嘴，啊——该喂我了吧。",
+			"再惹我的话，我可要咬你了哦。",
+			"别再逗我了，我脸都要黑了。",
+			"唔，好想吃好吃的……",
+			"张嘴换个口型，好看嘛？"
+		],
+		"Scale": 1,
+		"OffsetX": 0,
+		"OffsetY": 0
+	}
+}

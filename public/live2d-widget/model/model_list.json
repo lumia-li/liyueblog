@@ -1,14 +1,15 @@
 {
+  "version": 3,
+  "defaultModel": "dafeiyu",
   "models": [
     "Potion-Maker/Pio",
-    "Potion-Maker/Tia",
-    "bilibili-live/22",
-    "bilibili-live/33"
+    "dafeiyu"
   ],
+  "renderers": {
+    "dafeiyu": "cubism5"
+  },
   "messages": [
     "来自 Potion Maker 的 Pio 酱 ~",
-    "来自 Potion Maker 的 Tia 酱 ~",
-    "来自 Bilibili Live 的 22 哦 ~",
-    "来自 Bilibili Live 的 33 的说"
+    "来自 B站 的大肥鱼，请多关照 ~"
   ]
 }
