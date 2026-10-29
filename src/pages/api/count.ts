@@ -25,9 +25,11 @@ type RedisEnv = {
 
 // KEYS: 1 站点PV 2 站点UV 3 今日PV 4 今日UV 5 本页PV 6 本页UV 7 去重锁
 // ARGV: 1 访客哈希 2 去重锁秒数
+// 注意：用 EXISTS 判断锁，而不是 SET NX 的返回值——
+// Upstash 的 EVAL 里 SET NX 成功返回的是 table 而不是 "OK"，字符串比较永远不成立
 const COUNT_SCRIPT = `
-local counted = redis.call('SET', KEYS[7], '1', 'EX', ARGV[2], 'NX')
-if counted == 'OK' then
+if redis.call('EXISTS', KEYS[7]) == 0 then
+  redis.call('SET', KEYS[7], '1', 'EX', ARGV[2])
   redis.call('INCR', KEYS[1])
   redis.call('SADD', KEYS[2], ARGV[1])
   redis.call('INCR', KEYS[3])
