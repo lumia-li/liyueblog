@@ -17,4 +17,17 @@ interface ImportMetaEnv {
 	readonly TRANSLATE_GLOSSARY?: string;
 	/** 追加忽略词（逗号分隔） */
 	readonly TRANSLATE_IGNORE_WORDS?: string;
+
+	/** 计数存储：Upstash Redis REST 地址（Vercel Marketplace 集成 Upstash 后自动注入） */
+	readonly UPSTASH_REDIS_REST_URL?: string;
+	/** 计数存储：Upstash Redis REST 令牌 */
+	readonly UPSTASH_REDIS_REST_TOKEN?: string;
+	/** 兼容 Vercel KV 注入的变量名 */
+	readonly KV_REST_API_URL?: string;
+	readonly KV_REST_API_TOKEN?: string;
+	/** 兼容自定义命名 */
+	readonly COUNT_REDIS_URL?: string;
+	readonly COUNT_REDIS_TOKEN?: string;
+	/** UV 哈希盐值；更换后所有访客会被当成新访客重新计入 UV */
+	readonly COUNT_SALT?: string;
 }

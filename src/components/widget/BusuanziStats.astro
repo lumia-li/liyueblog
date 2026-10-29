@@ -1,10 +1,12 @@
 ---
+// 访问统计卡片：数据来自本站自建接口 /api/count（存储用 Upstash Redis）
+// 不再依赖任何第三方不蒜子 CDN，站点数据完全掌握在自己手里
 ---
 <section id="busuanzi-stats-card" class="site-state card-base mt-4 p-4 transition-swup-fade onload-animation">
 	<div
 		class="font-bold transition text-lg text-neutral-900 dark:text-neutral-100 relative ml-8 mb-3
-        before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
-        before:absolute before:left-[-16px] before:top-[5.5px]"
+       before:w-1 before:h-4 before:rounded-md before:bg-[var(--primary)]
+       before:absolute before:left-[-16px] before:top-[5.5px]"
 	>
 		访问统计
 	</div>
@@ -48,25 +50,25 @@
 
 <script is:inline>
 	(() => {
-		const SCRIPT_ID = "busuanzi-counter-script";
-		const SCRIPT_SRC = "https://cdn.busuanzi.cc/busuanzi/3.6.9/busuanzi.min.js";
 		const CARD_ID = "busuanzi-stats-card";
+		const API_URL = "/api/count";
+		// 同一次浏览里 swup 可能对同一个页面触发多次 page:view，
+		// 重复上报会多记 PV，所以同一个 path 在 30 秒内只上报一次
+		const DEDUPE_MS = 30000;
+		const CACHE_KEY = "busuanzi:last";
 
-		const setTextSafely = (id, value) => {
-			const el = document.getElementById(id);
-			if (!el) return;
-			el.textContent = value;
-		};
+		const FIELDS = [
+			["site_pv", "busuanzi_site_pv"],
+			["today_pv", "busuanzi_today_pv"],
+			["today_uv", "busuanzi_today_uv"],
+			["site_uv", "busuanzi_site_uv"],
+			["page_pv", "busuanzi_page_pv"],
+			["page_uv", "busuanzi_page_uv"],
+		];
 
-		const setFallbackValues = () => {
-			[
-				"busuanzi_site_pv",
-				"busuanzi_today_pv",
-				"busuanzi_today_uv",
-				"busuanzi_site_uv",
-				"busuanzi_page_pv",
-				"busuanzi_page_uv",
-			].forEach((id) => setTextSafely(id, "--"));
+		const setText = (id, value) => {
+			const node = document.getElementById(id);
+			if (node) node.textContent = value;
 		};
 
 		// 整句写入同一个文本节点，保证翻译引擎能拿到完整句子
@@ -75,7 +77,7 @@
 			const sentence = document.getElementById("busuanzi_friend_sentence");
 			if (!siteUv || !sentence) return;
 			const value = siteUv.textContent?.trim();
-			if (!value || value === "加载中...") return;
+			if (!value || value === "加载中..." || value === "--") return;
 			// 同一个值只写一次：重复写入会覆盖掉引擎写回的译文
 			if (sentence.dataset.value === value) return;
 			sentence.dataset.value = value;
@@ -86,55 +88,95 @@
 			sentence.textContent = `您是本站的第 ${value} 个小伙伴`;
 		};
 
-		const bindFriendObserver = () => {
-			const siteUv = document.getElementById("busuanzi_site_uv");
-			if (!siteUv) return;
-
-			const prevObserver = window.__busuanziSiteUvObserver;
-			if (prevObserver && typeof prevObserver.disconnect === "function") {
-				prevObserver.disconnect();
-			}
-
-			const observer = new MutationObserver(syncFriendCounter);
-			observer.observe(siteUv, {
-				childList: true,
-				subtree: true,
-				characterData: true,
+		const render = (data) => {
+			if (!data) return false;
+			let applied = false;
+			FIELDS.forEach(([field, id]) => {
+				const value = data[field];
+				if (value === undefined || value === null) return;
+				setText(id, String(value));
+				applied = true;
 			});
-			window.__busuanziSiteUvObserver = observer;
+			if (applied) syncFriendCounter();
+			return applied;
 		};
 
-		const loadBusuanzi = () => {
-			window.busuanziRequestSent = false;
-
-			const oldScript = document.getElementById(SCRIPT_ID);
-			if (oldScript) oldScript.remove();
-
-			const script = document.createElement("script");
-			script.id = SCRIPT_ID;
-			script.src = SCRIPT_SRC;
-			script.defer = true;
-			script.onload = () => setTimeout(syncFriendCounter, 120);
-			script.onerror = () => setFallbackValues();
-			document.head.appendChild(script);
+		const readCache = () => {
+			try {
+				const raw = localStorage.getItem(CACHE_KEY);
+				return raw ? JSON.parse(raw) : null;
+			} catch {
+				return null;
+			}
 		};
 
-		const refreshBusuanzi = () => {
+		const writeCache = (data) => {
+			try {
+				localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+			} catch {
+				// 隐私模式下 localStorage 可能不可用，忽略即可
+			}
+		};
+
+		const setUnavailable = () => {
+			FIELDS.forEach(([, id]) => setText(id, "--"));
+		};
+
+		const shouldCount = (path) => {
+			const key = `busuanzi:counted:${path}`;
+			let last = 0;
+			try {
+				last = Number(sessionStorage.getItem(key) || 0);
+			} catch {
+				last = 0;
+			}
+			if (Date.now() - last < DEDUPE_MS) return false;
+			try {
+				sessionStorage.setItem(key, String(Date.now()));
+			} catch {
+				// 忽略
+			}
+			return true;
+		};
+
+		const requestCount = async () => {
 			const card = document.getElementById(CARD_ID);
 			if (!card) return;
 
-			loadBusuanzi();
-			bindFriendObserver();
-			setTimeout(syncFriendCounter, 180);
+			const path = window.location.pathname;
+			// 先用上一次的结果垫上，避免每次切页都闪一下「加载中...」
+			render(readCache());
+
+			if (!shouldCount(path)) {
+				syncFriendCounter();
+				return;
+			}
+
+			try {
+				const response = await fetch(API_URL, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ path }),
+				});
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const data = await response.json();
+				if (!data?.ok) throw new Error(data?.message || "统计接口返回异常");
+				writeCache(data);
+				render(data);
+			} catch (error) {
+				// 接口挂了就退回本地缓存，缓存也没有则显示占位符
+				if (!render(readCache())) setUnavailable();
+				console.warn("[count] 统计请求失败：", error);
+			}
 		};
 
 		const bindSwupHook = () => {
-			if (!window.swup?.hooks || window.__busuanziSwupHooked) return;
-			window.__busuanziSwupHooked = true;
-			window.swup.hooks.on("page:view", refreshBusuanzi);
+			if (!window.swup?.hooks || window.__countSwupHooked) return;
+			window.__countSwupHooked = true;
+			window.swup.hooks.on("page:view", requestCount);
 		};
 
-		refreshBusuanzi();
+		requestCount();
 		if (window.swup?.hooks) {
 			bindSwupHook();
 		} else {
