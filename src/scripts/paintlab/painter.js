@@ -181,21 +181,14 @@ export function createPainter(options) {
 	function resizeCanvas() {
 		const rect = canvas.getBoundingClientRect();
 		const dpr = Math.min(window.devicePixelRatio || 1, 2);
-		// CSS 尺寸取整，再乘 DPR：保证 1 个 CSS 像素正好对应整数个物理像素。
-		// 否则容器高度带小数（如 421.5px）时，每帧重绘的细线会按非整数比例重采样，
-		// 视觉上就是画面在轻微抖动/闪烁。
-		const cssW = Math.max(1, Math.round(rect.width));
-		const cssH = Math.max(1, Math.round(rect.height));
-		const width = cssW * dpr;
-		const height = cssH * dpr;
+		const width = Math.max(1, Math.round(rect.width * dpr));
+		const height = Math.max(1, Math.round(rect.height * dpr));
 		if (width === canvas.width && height === canvas.height) {
 			computeTransform();
 			return;
 		}
 		canvas.width = width;
 		canvas.height = height;
-		canvas.style.width = `${cssW}px`;
-		canvas.style.height = `${cssH}px`;
 		base.width = width;
 		base.height = height;
 		computeTransform();

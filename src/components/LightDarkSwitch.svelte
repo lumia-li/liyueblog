@@ -46,6 +46,16 @@ function showPanel() {
 	panel.classList.remove("float-panel-closed");
 }
 
+// 触摸设备没有真正的 hover：长按相邻按钮时浏览器会派发 mouseenter，
+// 导致「主题切换」面板被误触发。只在支持 hover 的设备上响应悬停。
+const canHover = () =>
+	typeof window !== "undefined" &&
+	window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+function showPanelIfHoverable() {
+	if (canHover()) showPanel();
+}
+
 function hidePanel() {
 	const panel = document.querySelector("#light-dark-panel");
 	panel.classList.add("float-panel-closed");
@@ -54,7 +64,7 @@ function hidePanel() {
 
 <!-- z-50 make the panel higher than other float panels -->
 <div class="relative z-50" role="menu" tabindex="-1" onmouseleave={hidePanel}>
-    <button aria-label="Light/Dark Mode" role="menuitem" class="relative nav-icon-btn h-11 w-11 active:scale-90" id="scheme-switch" onclick={toggleScheme} onmouseenter={showPanel} data-tooltip="主题切换">
+    <button aria-label="Light/Dark Mode" role="menuitem" class="relative nav-icon-btn h-11 w-11 active:scale-90" id="scheme-switch" onclick={toggleScheme} onmouseenter={showPanelIfHoverable} data-tooltip="主题切换">
         <div class="absolute" class:opacity-0={mode !== LIGHT_MODE}>
             <Icon icon="material-symbols:wb-sunny-outline-rounded" class="text-[1.25rem]"></Icon>
         </div>

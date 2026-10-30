@@ -1085,7 +1085,10 @@ const homeBannerHeight = "56vh";
 			}
 
 			// 加载 live2d.min.js waifu-tips.js（waifu.css 走静态 <head> 链接）
-			if (screen.width >= 768) {
+			// 看板娘只在桌面端加载：触摸设备（手机/平板）和窄屏一律跳过
+			const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+			const isNarrowScreen = window.innerWidth < 768;
+			if (!isCoarsePointer && !isNarrowScreen) {
 				Promise.all([
 					loadExternalResource(live2d_asset("live2d.min.js"), "js"),
 					loadExternalResource(live2d_asset("waifu-tips.js"), "js")
@@ -1992,6 +1995,14 @@ const homeBannerHeight = "56vh";
 		@apply opacity-0;
 		transform: translateY(-100%);
 		pointer-events: none;
+	}
+}
+
+/* 手机端不显示看板娘（JS 侧已不加载，这里再兜底一层） */
+@media (max-width: 767px) {
+	#waifu,
+	#live2d-stage {
+		display: none !important;
 	}
 }
 

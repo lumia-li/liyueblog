@@ -477,6 +477,8 @@ export function mountPaintlab(): void {
 		lightbox.hidden = false;
 		lightbox.classList.add("is-open");
 		document.body.style.overflow = "hidden";
+		// 全屏绘制时藏掉灯笼等页面装饰，避免挡住画面
+		document.body.classList.add("paintlab-lb-open");
 		lbPainter.load(item.data, { autoplay: true });
 		fitLightbox();
 		lbImage.src = item.url;
@@ -493,6 +495,7 @@ export function mountPaintlab(): void {
 		lightbox.classList.remove("is-open");
 		lightbox.hidden = true;
 		document.body.style.overflow = "";
+		document.body.classList.remove("paintlab-lb-open");
 		lbStage.classList.remove("is-cmp");
 		lbCmp.classList.remove("active");
 		lbPainter.pause();
@@ -840,6 +843,7 @@ export function mountPaintlab(): void {
 		});
 		items = [];
 		document.body.style.overflow = "";
+		document.body.classList.remove("paintlab-lb-open");
 		lightbox.classList.remove("is-open");
 		lightbox.hidden = true;
 		lbCtx?.clearRect(0, 0, lbCanvas.width, lbCanvas.height);

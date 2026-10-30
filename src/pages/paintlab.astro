@@ -12,7 +12,7 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 		<div class="card-base z-10 px-6 py-5 relative w-full paintlab-root" id="paintlab-app">
 			<div class="flex flex-wrap items-start justify-between gap-4">
 				<div class="min-w-0">
-					<div class="font-bold text-xl text-neutral-900 dark:text-neutral-100">Paintlab</div>
+					<div class="font-bold text-xl paintlab-title-shine">Paintlab</div>
 					<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
 						把图片拖进下方区域，按上传顺序逐张画出来；点击任意缩略图看大图。
 					</p>
@@ -137,6 +137,57 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 
 	:root.dark .paintlab-root {
 		color: rgba(255, 255, 255, 0.9);
+	}
+
+	/* 全屏绘制时隐藏灯笼等页面装饰，避免挡住画面 */
+	body.paintlab-lb-open .lantern-container,
+	body.paintlab-lb-open .lantern-toggle-container {
+		display: none !important;
+	}
+
+	/* 页面标题：彩色径向流光（浅色深彩、深色亮彩），单向流动 */
+	.paintlab-title-shine {
+		display: inline-block;
+		/* 与深色同一套色相（金 → 粉 → 蓝），只把明度压深 */
+		background-image: radial-gradient(
+			circle at 50% 50%,
+			#0b1220 0%,
+			#a16207 26%,
+			#be185d 46%,
+			#1d4ed8 62%,
+			#0b1220 100%
+		);
+		background-size: 200% 200%;
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+		color: transparent;
+		animation: paintlab-title-shine 3s linear infinite;
+	}
+	:root.dark .paintlab-title-shine {
+		background-image: radial-gradient(
+			circle at 50% 50%,
+			#ffffff 0%,
+			#ffd166 26%,
+			#ff7ac6 46%,
+			#7cc4ff 62%,
+			#ffffff 100%
+		);
+	}
+
+	@keyframes paintlab-title-shine {
+		from {
+			background-position: 0% 50%;
+		}
+		to {
+			background-position: 200% 50%;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.paintlab-title-shine {
+			animation: none;
+		}
 	}
 
 	/* 工具条：上传区 | 统计 | 操作 */

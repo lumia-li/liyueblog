@@ -57,7 +57,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
                 <span class="nav-site-title">{siteConfig.title}</span>
             </div>
         </a>
-        <div class="hidden md:flex">
+        <div class="nav-links-row hidden md:flex">
             {links.map((l) => {
                 return <a aria-label={l.name} href={l.external ? l.url : url(l.url)} target={l.external ? "_blank" : null}
                           class:list={["nav-item nav-item-link rounded-xl h-11 font-bold px-5 transition", getNavItemClasses(l.url, Boolean(l.external))]}
@@ -68,7 +68,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
                     </div>
                 </a>;
             })}
-            <a class="nav-paintlab" href={url("/paintlab/")} aria-label="Paintlab">
+            <a class="nav-paintlab" href={url("/paintlab/")} aria-label="Paintlab" data-tooltip="Paintlab">
                 <span class="nav-paintlab-border" aria-hidden="true"></span>
                 <span class="nav-paintlab-inner">
                     <Icon name="fa6-solid:paintbrush" class="nav-link-icon text-[1.15rem] shrink-0" />
@@ -101,6 +101,17 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
             )}
             <LightDarkSwitch client:only="svelte"></LightDarkSwitch>
             <TranslateSwitch client:only="svelte"></TranslateSwitch>
+            <a
+                class="nav-paintlab nav-paintlab-mobile md:!hidden"
+                href={url("/paintlab/")}
+                aria-label="Paintlab"
+                data-tooltip="Paintlab"
+            >
+                <span class="nav-paintlab-border" aria-hidden="true"></span>
+                <span class="nav-paintlab-inner">
+                    <Icon name="fa6-solid:paintbrush" class="nav-link-icon text-[1.15rem] shrink-0" />
+                </span>
+            </a>
             <button aria-label="Menu" name="Nav Menu" class="nav-icon-btn w-11 h-11 active:scale-90 md:!hidden" id="nav-menu-switch">
                 <Icon name="material-symbols:menu-rounded" class="text-[1.25rem]"></Icon>
             </button>
@@ -387,6 +398,20 @@ window.addEventListener("storage", (event) => {
         0 1px 2px rgba(0, 0, 0, 0.28);
 }
 
+/* 浅色模式：导航里所有图标统一加白边发光（Paintlab 自己的彩色流光排除在外） */
+:global(:root:not(.dark) #navbar .nav-surface svg:not(.nav-paintlab svg)) {
+    filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95))
+        drop-shadow(0 0 5px rgba(255, 255, 255, 0.6));
+}
+
+/* 浅色模式：翻译开关那串「简体中文」也要有同样的柔光 */
+:global(:root:not(.dark) #navbar .nav-surface #translate-switch-trigger),
+:global(:root:not(.dark) #navbar .nav-surface #translate-switch-trigger *) {
+    text-shadow:
+        0 0 6px rgba(255, 255, 255, 0.9),
+        0 0 2px rgba(255, 255, 255, 0.95);
+}
+
 /* 「璃月小站」保持主题色 */
 :global(#navbar .nav-surface .nav-brand),
 :global(#navbar .nav-surface .nav-brand svg) {
@@ -422,6 +447,9 @@ window.addEventListener("storage", (event) => {
     border-radius: 12px;
     text-decoration: none;
     background: transparent;
+    /* 触摸时不要触发长按菜单 / 双击缩放，避免和相邻按钮抢手势 */
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
     transition:
         box-shadow 0.25s ease,
         transform 0.12s ease;
@@ -516,6 +544,27 @@ window.addEventListener("storage", (event) => {
     }
 }
 
+/* 画笔图标本身流动的彩色光晕 */
+:global(.nav-paintlab .nav-link-icon) {
+    animation: paintlab-icon-flow 3.2s linear infinite;
+}
+
+@keyframes paintlab-icon-flow {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 3px rgba(124, 196, 255, 0.95))
+            drop-shadow(0 0 9px rgba(124, 196, 255, 0.5));
+    }
+    33% {
+        filter: drop-shadow(0 0 3px rgba(255, 209, 102, 0.95))
+            drop-shadow(0 0 9px rgba(255, 209, 102, 0.5));
+    }
+    66% {
+        filter: drop-shadow(0 0 3px rgba(255, 122, 198, 0.95))
+            drop-shadow(0 0 9px rgba(255, 122, 198, 0.5));
+    }
+}
+
 :global(.nav-paintlab-inner) {
     display: inline-flex;
     align-items: center;
@@ -541,12 +590,13 @@ window.addEventListener("storage", (event) => {
 :global(.nav-paintlab-inner .nav-link-label) {
     /* 保留一点白色柔光提升可读性，但强度远低于普通导航文字，避免糊住渐变 */
     text-shadow: 0 0 4px rgba(255, 255, 255, 0.42) !important;
+    /* 与深色同一套色相（金 → 粉 → 蓝），只把明度压深，保证浅底可读 */
     background-image: radial-gradient(
         circle at 50% 50%,
         #0b1220 0%,
-        #1d4ed8 26%,
-        #9333ea 46%,
-        #db2777 62%,
+        #a16207 26%,
+        #be185d 46%,
+        #1d4ed8 62%,
         #0b1220 100%
     );
     background-size: 200% 200%;
@@ -578,15 +628,50 @@ window.addEventListener("storage", (event) => {
     }
 }
 
+/* 导航项之间留出间距（图标模式尤其需要，否则图标挤成一片）。
+   只设 gap，display 仍交给 Tailwind 的 hidden / md:flex 控制 */
+:global(.nav-links-row) {
+    align-items: center;
+    gap: 6px;
+}
+
 @media (max-width: 1180px) {
+    :global(.nav-links-row) {
+        gap: 10px;
+    }
+
+    /* 图标模式：不要底色，只把画笔图标本身点亮流光 */
     :global(.nav-paintlab) {
-        padding: 0 9px;
+        padding: 0 10px;
+        border-radius: 11px;
+        background: transparent;
+        box-shadow: none;
+    }
+}
+
+/* 手机端：翻译按钮让位给 Paintlab */
+@media (max-width: 767px) {
+    :global(#navbar #translate-switch-trigger) {
+        display: none !important;
+    }
+    :global(.nav-paintlab-mobile) {
+        margin-left: 2px;
+    }
+    /* 手机端没有 hover：默认不显示，手指按下（:active）时才点亮流光描边 */
+    :global(.nav-paintlab-mobile .nav-paintlab-border) {
+        opacity: 0;
+        transition: opacity 0.12s ease;
+    }
+    :global(.nav-paintlab-mobile:active .nav-paintlab-border),
+    :global(.nav-paintlab-mobile:focus-visible .nav-paintlab-border) {
+        opacity: 1;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     :global(.nav-paintlab-border::before),
-    :global(.nav-paintlab-inner .nav-link-label) {
+    :global(.nav-paintlab-inner .nav-link-label),
+    :global(.nav-paintlab .nav-link-icon) {
         animation: none;
     }
 }
