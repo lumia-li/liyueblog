@@ -6,7 +6,7 @@
  */
 import confetti from "canvas-confetti";
 
-const DURATION = 2400;
+const DURATION = 3500;
 const COLORS = ["#7fb4ff", "#ffd166", "#ff8fab", "#8ef0c0", "#c7b2ff"];
 
 let running = false;
@@ -57,7 +57,7 @@ function launch(): void {
 }
 
 /** chance 为触发放烟花的概率（0~1）；不是每张都放 */
-export function maybeCelebrate(chance = 0.5): void {
+export function maybeCelebrate(chance = 0.8): void {
 	if (Math.random() > chance) return;
 	launch();
 }

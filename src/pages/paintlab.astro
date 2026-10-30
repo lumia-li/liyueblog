@@ -473,6 +473,8 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		flex: 1 1 auto;
+		/* 允许被压缩到任意宽度，靠省略号收尾，绝不挤占右侧状态区 */
+		min-width: 0;
 	}
 	.paintlab-sub {
 		font-size: 11px;
@@ -482,6 +484,8 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 	.paintlab-tag {
 		font-size: 11px;
 		opacity: 0.72;
+		white-space: nowrap;
+		flex: 0 0 auto;
 	}
 	.paintlab-tag[data-state="playing"] {
 		color: var(--primary);
@@ -492,12 +496,14 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 		opacity: 1;
 	}
 
-	/* 状态行：文字 + 细进度条 + 完成对号 */
+	/* 状态行：文字 + 细进度条 + 完成对号；宽度固定，不被文件名挤压 */
 	.paintlab-status {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		min-height: 16px;
+		flex: 0 0 auto;
+		white-space: nowrap;
 	}
 	.paintlab-meter {
 		position: relative;
