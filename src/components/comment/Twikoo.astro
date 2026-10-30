@@ -43,9 +43,9 @@ const config = {
         lang: 'zh-CN',
         region: 'cn',
         visitor: true,
-        // 评论索引固定沿用旧域名 + 当前路径：
-        // 博客迁到 blog.liyueovo.top 后，历史评论仍然能对上，无需迁移数据库
-        path: `https://liyueovo.top${window.location.pathname}`,
+        // 不指定 path：Twikoo 默认按 pathname 索引评论，
+        // 历史数据本来就是 "/posts/xxx" 形式，换域名不受影响
+
         onCommentLoaded: function() {
           console.log('评论加载完成');
           loadDrawingScript();
