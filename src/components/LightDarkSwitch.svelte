@@ -11,7 +11,6 @@ import {
 import { onMount } from "svelte";
 import type { LIGHT_DARK_MODE } from "@/types/config.ts";
 
-const seq: LIGHT_DARK_MODE[] = [LIGHT_MODE, DARK_MODE, AUTO_MODE];
 let mode: LIGHT_DARK_MODE = AUTO_MODE;
 
 onMount(() => {
@@ -37,13 +36,9 @@ function switchScheme(newMode: LIGHT_DARK_MODE) {
 }
 
 function toggleScheme() {
-	let i = 0;
-	for (; i < seq.length; i++) {
-		if (seq[i] === mode) {
-			break;
-		}
-	}
-	switchScheme(seq[(i + 1) % seq.length]);
+	// 点击只在「浅色 ↔ 深色」之间切换；
+	// 「跟随系统」只能从下拉面板里选择，不参与点击轮换
+	switchScheme(mode === DARK_MODE ? LIGHT_MODE : DARK_MODE);
 }
 
 function showPanel() {

@@ -68,7 +68,7 @@ export const SERVER_IGNORE_WORDS: string[] = [
 	"liyueovo.top",
 	"liyueovo",
 	"liyue-blog",
-	"wangchen-2023",
+	"lumia-li",
 	"CC BY-NC-SA 4.0",
 ];
 

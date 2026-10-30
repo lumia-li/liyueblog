@@ -833,6 +833,8 @@ const homeBannerHeight = "56vh";
 			}
 
 			// Lightweight parallax motion for backgrounds
+			// 开关：false = 背景完全静止（点击、滚动、换页都不位移）
+			const PARALLAX_ENABLED = false;
 			const PARALLAX_STRENGTH = 0.12;
 			const PARALLAX_MAX = 80;
 			const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -871,7 +873,7 @@ const homeBannerHeight = "56vh";
 			};
 
 			const updateParallaxBase = () => {
-				if (prefersReducedMotion.matches) {
+				if (!PARALLAX_ENABLED || prefersReducedMotion.matches) {
 					root.style.setProperty('--background-parallax-y', '0px');
 					parallaxState.pulse = 0;
 					return;
@@ -882,7 +884,7 @@ const homeBannerHeight = "56vh";
 			};
 
 			const kickParallaxPulse = (magnitude = 64) => {
-				if (prefersReducedMotion.matches) {
+				if (!PARALLAX_ENABLED || prefersReducedMotion.matches) {
 					return;
 				}
 				parallaxState.pulse = magnitude * (Math.random() * 0.35 + 0.65);

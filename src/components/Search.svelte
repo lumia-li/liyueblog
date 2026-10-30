@@ -4,7 +4,7 @@ import { i18n } from "@i18n/translation";
 import Icon from "@iconify/svelte";
 import { getDeveloperModeEnabled } from "@utils/setting-utils";
 import { url } from "@utils/url-utils.ts";
-import { onMount } from "svelte";
+import { onMount, tick } from "svelte";
 import type { SearchResult } from "@/global";
 
 let keywordDesktop = "";
@@ -14,6 +14,17 @@ let isSearching = false;
 let pagefindLoaded = false;
 let initialized = false;
 let developerModeEnabled = false;
+/** 桌面搜索框：默认收起，点击展开，点空白关闭 */
+let desktopExpanded = false;
+let desktopBarEl: HTMLDivElement | null = null;
+let desktopInputEl: HTMLInputElement | null = null;
+
+const expandDesktopSearch = async () => {
+	if (desktopExpanded) return;
+	desktopExpanded = true;
+	await tick();
+	desktopInputEl?.focus();
+};
 const cjkRegex = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
 const editorHref = url("/editor");
 const draftsHref = url("/drafts");
@@ -173,6 +184,15 @@ onMount(() => {
 	window.addEventListener("focus", handleFocus);
 	document.addEventListener("visibilitychange", handleVisibility);
 
+	// 点击搜索框以外的空白处 -> 收起
+	const handleDocumentClick = (event: MouseEvent) => {
+		if (!desktopExpanded) return;
+		const target = event.target;
+		if (target instanceof Node && desktopBarEl?.contains(target)) return;
+		desktopExpanded = false;
+	};
+	document.addEventListener("click", handleDocumentClick);
+
 	let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 	const handlePagefindReady = () => {
 		console.log("Pagefind ready event received.");
@@ -210,6 +230,7 @@ onMount(() => {
 		);
 		window.removeEventListener("focus", handleFocus);
 		document.removeEventListener("visibilitychange", handleVisibility);
+		document.removeEventListener("click", handleDocumentClick);
 		document.removeEventListener("pagefindready", handlePagefindReady);
 		document.removeEventListener("pagefindloaderror", handlePagefindLoadError);
 		if (fallbackTimer) {
@@ -231,48 +252,25 @@ $: if (initialized && keywordMobile) {
 }
 </script>
 
-{#if developerModeEnabled}
-    <a
-       href={editorHref}
-       data-no-swup
-       aria-label="Open Editor"
-       class="nav-icon-btn hidden lg:!inline-flex h-11 w-11 active:scale-90 mr-2"
-       data-tooltip="文章"
-    >
-        <Icon icon="fa6-solid:pen" class="text-[1rem]"></Icon>
-    </a>
-    <a
-       href={draftsHref}
-       data-no-swup
-       aria-label="Open Drafts"
-       class="nav-icon-btn hidden lg:!inline-flex h-11 w-11 active:scale-90 mr-2"
-       data-tooltip="草稿"
-    >
-        <Icon icon="fa6-solid:box-archive" class="text-[1rem]"></Icon>
-    </a>
-    <a
-       href={trashHref}
-       data-no-swup
-       aria-label="Open Trash"
-       class="nav-icon-btn nav-icon-btn-danger hidden lg:!inline-flex h-11 w-11 active:scale-90 mr-2"
-       data-tooltip="垃圾桶"
-    >
-        <Icon
-           icon="material-symbols:delete-outline-rounded"
-           class="text-[1.25rem] !text-red-500"
-        ></Icon>
-    </a>
-{/if}
-
-<!-- search bar for desktop view -->
-<div id="search-bar" class="menu-item-search hidden lg:flex transition-all items-center h-11 mr-2 rounded-lg
-      bg-black/[0.04] hover:bg-black/[0.06] focus-within:bg-black/[0.06]
-      dark:bg-white/5 dark:hover:bg-white/10 dark:focus-within:bg-white/10
-">
-    <Icon icon="material-symbols:search" class="absolute text-[1.25rem] pointer-events-none ml-3 transition my-auto text-black/30 dark:text-white/30"></Icon>
-    <input placeholder="{i18n(I18nKey.search)}" bind:value={keywordDesktop} on:focus={() => search(keywordDesktop, true)}
-           class="transition-all pl-10 text-sm bg-transparent outline-0
-         h-full w-40 active:w-60 focus:w-60 text-black/50 dark:text-white/50"
+<!-- search bar for desktop view：默认收起，点击展开，点空白关闭 -->
+<div
+    id="search-bar"
+    bind:this={desktopBarEl}
+    on:click={expandDesktopSearch}
+    class="menu-item-search hidden lg:flex transition-all duration-300 items-center h-11 mr-2 rounded-lg cursor-pointer overflow-hidden
+      bg-transparent border border-transparent
+      hover:border-[var(--primary)] focus-within:border-[var(--primary)]
+      {desktopExpanded ? 'w-56' : 'w-11'}"
+>
+    <Icon icon="material-symbols:search" class="absolute text-[1.25rem] pointer-events-none ml-3 transition my-auto text-black dark:text-white"></Icon>
+    <input
+        bind:this={desktopInputEl}
+        placeholder="{i18n(I18nKey.search)}"
+        bind:value={keywordDesktop}
+        on:focus={() => search(keywordDesktop, true)}
+        class="transition-all pl-10 text-sm bg-transparent outline-0 h-full
+        text-black dark:text-white placeholder:text-black dark:placeholder:text-white
+        {desktopExpanded ? 'w-full opacity-100' : 'w-0 opacity-0 pointer-events-none'}"
     >
 </div>
 

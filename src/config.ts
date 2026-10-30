@@ -94,7 +94,7 @@ export const profileConfig: ProfileConfig = {
 		{
 			name: "github",
 			icon: "fa6-brands:github",
-			url: "https://github.com/wangchen-2023",
+			url: "https://github.com/lumia-li/",
 		},
 	],
 };

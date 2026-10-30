@@ -28,7 +28,7 @@ import vercel from "@astrojs/vercel";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://liyueovo.top/",
+  site: "https://blog.liyueovo.top/",
   base: "/",
   trailingSlash: "ignore",
 

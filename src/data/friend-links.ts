@@ -9,9 +9,9 @@ export const friendLinkConfig: FriendLinkConfig = {
     self: {
         name: "璃月小站",
         avatar: "/images/avatar.webp",
-        avatarUrl: "https://liyueovo.top/images/avatar.webp", // 供他人引用的头像直链
+        avatarUrl: "https://blog.liyueovo.top/images/avatar.webp", // 供他人引用的头像直链
         description: "分享技术与生活的小站，记录一些碎碎念",
-        url: "https://liyueovo.top/",
+        url: "https://blog.liyueovo.top/",
         tags: ["技术", "生活"],
     },
     // 申请友链的说明区块，enable 设为 false 即可隐藏

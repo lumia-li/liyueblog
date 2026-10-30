@@ -9,6 +9,7 @@ import Search from "./Search.svelte";
 import TranslateSwitch from "./TranslateSwitch.svelte";
 import DisplaySettings from "./widget/DisplaySettings.svelte";
 import NavMenuPanel from "./widget/NavMenuPanel.astro";
+import DevQuickActions from "./editor/DevQuickActions.svelte";
 
 const className = Astro.props.class;
 
@@ -20,6 +21,19 @@ let links: NavBarLink[] = navBarConfig.links.map(
 		return item;
 	},
 );
+
+// 窄屏时导航项改用图标，这里按链接地址映射
+const navIconMap: Record<string, string> = {
+	"/": "material-symbols:home-outline-rounded",
+	"/thoughts/": "material-symbols:edit-note-rounded",
+	"/friends/": "material-symbols:group-outline-rounded",
+	"/archive/": "material-symbols:inventory-2-outline-rounded",
+};
+const getNavIcon = (targetUrl: string, external = false): string => {
+	if (external) return "material-symbols:arrow-outward-rounded";
+	const normalized = targetUrl.endsWith("/") ? targetUrl : `${targetUrl}/`;
+	return navIconMap[normalized] ?? "material-symbols:link-rounded";
+};
 
 const getNavItemClasses = (targetUrl: string, external = false) => {
 	const classes = ["menu-item", "nav-link"];
@@ -36,25 +50,33 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
     <!-- used for onload animation removed for glass effect -->
     <div class:list={[
         className,
-        "card-base !overflow-visible max-w-[var(--page-width)] h-[4.5rem] mx-auto flex items-center justify-between px-4 bg-white/70 dark:bg-black/60 border-b border-white/20 dark:border-white/10 rounded-2xl"]}>
+        "nav-surface card-base !overflow-visible max-w-[var(--page-width)] h-[4.5rem] mx-auto flex items-center justify-between px-4 bg-white/70 dark:bg-black/60 border-b border-white/20 dark:border-white/10 rounded-2xl"]}>
         <a href={url('/')} class:list={["nav-item rounded-xl h-[3.25rem] px-5 font-bold transition", getNavItemClasses("/")]} >
-            <div class="nav-text flex flex-row text-[var(--primary)] items-center text-md">
-                <Icon name="material-symbols:home-outline-rounded" class="text-[1.75rem] mb-1 mr-2" />
-                {siteConfig.title}
+            <div class="nav-brand nav-text flex flex-row text-[var(--primary)] items-center text-md">
+                <Icon name="material-symbols:home-outline-rounded" class="text-[1.75rem] mb-1 mr-2 shrink-0" />
+                <span class="nav-site-title">{siteConfig.title}</span>
             </div>
         </a>
         <div class="hidden md:flex">
             {links.map((l) => {
                 return <a aria-label={l.name} href={l.external ? l.url : url(l.url)} target={l.external ? "_blank" : null}
-                          class:list={["nav-item rounded-xl h-11 font-bold px-5 transition", getNavItemClasses(l.url, Boolean(l.external))]}
+                          class:list={["nav-item nav-item-link rounded-xl h-11 font-bold px-5 transition", getNavItemClasses(l.url, Boolean(l.external))]}
                 >
-                    <div class="nav-text flex items-center">
-                        {l.name}
-                        {l.external && <Icon name="fa6-solid:arrow-up-right-from-square" class="text-[0.875rem] transition -translate-y-[1px] ml-1 text-black/[0.2] dark:text-white/[0.2]"></Icon>}
+                    <div class="nav-text flex items-center gap-1.5">
+                        <Icon name={getNavIcon(l.url, Boolean(l.external))} class="nav-link-icon text-[1.35rem] shrink-0" />
+                        <span class="nav-link-label">{l.name}</span>
                     </div>
                 </a>;
-            })}</div>
-        <div class="flex">
+            })}
+            <a class="nav-paintlab" href={url("/paintlab/")} aria-label="Paintlab">
+                <span class="nav-paintlab-border" aria-hidden="true"></span>
+                <span class="nav-paintlab-inner">
+                    <Icon name="fa6-solid:paintbrush" class="nav-link-icon text-[1.15rem] shrink-0" />
+                    <span class="nav-link-label">Paintlab</span>
+                </span>
+            </a>
+        </div>
+        <div class="flex shrink-0 items-center relative">
             <!--<SearchPanel client:load>-->
             <Search client:only="svelte"></Search>
             <button aria-label="背景模式切换" class="nav-icon-btn h-11 w-11 active:scale-90" id="background-mode-switch" data-tooltip="背景模式">
@@ -82,6 +104,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
             <button aria-label="Menu" name="Nav Menu" class="nav-icon-btn w-11 h-11 active:scale-90 md:!hidden" id="nav-menu-switch">
                 <Icon name="material-symbols:menu-rounded" class="text-[1.25rem]"></Icon>
             </button>
+            <DevQuickActions client:only="svelte"></DevQuickActions>
         </div>
         <NavMenuPanel links={links}></NavMenuPanel>
         <DisplaySettings client:only="svelte"></DisplaySettings>
@@ -310,9 +333,296 @@ window.addEventListener("storage", (event) => {
         applyDevEditorButtonVisibility();
     }
 });
+
+// 导航栏底板：默认透明，只有内容滚动到与导航栏重叠时才补上底色/边框/模糊
+(() => {
+    const surface = document.querySelector("#navbar .nav-surface");
+    if (!surface) return;
+    const THRESHOLD = 40;
+    const syncNavSurface = () => {
+        surface.classList.toggle(
+            "is-scrolled",
+            (window.scrollY || window.pageYOffset || 0) > THRESHOLD,
+        );
+    };
+    syncNavSurface();
+    window.addEventListener("scroll", syncNavSurface, { passive: true });
+})();
 </script>
 
 <style>
+/* 导航栏底板（底色 + 底边框 + 背景模糊）：默认去掉，滚动后加 .is-scrolled 恢复 */
+:global(html #navbar .nav-surface:not(.is-scrolled)) {
+    background: transparent !important;
+    border-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+/* 导航栏内除「璃月小站」外的文字与图标：浅色黑、深色白 */
+:global(#navbar .nav-surface) {
+    color: #000;
+}
+
+:global(:root.dark #navbar .nav-surface) {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+:global(#navbar .nav-surface button),
+:global(#navbar .nav-surface select),
+:global(#navbar .nav-surface .nav-link-label),
+:global(#navbar .nav-surface .nav-text:not(.nav-brand)),
+:global(#navbar .nav-surface svg) {
+    color: inherit;
+}
+
+/* 浅色模式是黑字，壁纸可能是深色，给文字一圈柔光避免看不见 */
+:global(:root:not(.dark) #navbar .nav-surface .nav-link-label),
+:global(:root:not(.dark) #navbar .nav-surface .nav-site-title),
+:global(:root:not(.dark) #navbar .nav-surface .nav-brand) {
+    text-shadow:
+        0 0 6px rgba(255, 255, 255, 0.9),
+        0 0 2px rgba(255, 255, 255, 0.95),
+        0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+/* 「璃月小站」保持主题色 */
+:global(#navbar .nav-surface .nav-brand),
+:global(#navbar .nav-surface .nav-brand svg) {
+    color: var(--primary);
+}
+
+/* 弹出面板（主题/翻译/搜索）恢复主题配色：浅色为黑、深色为白 */
+:global(:root.dark #navbar .nav-surface .float-panel),
+:global(:root.dark #navbar .nav-surface .float-panel *) {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* 站点标题默认单行，禁止逐字换行 */
+:global(.nav-site-title) {
+    white-space: nowrap;
+}
+
+/* 导航项文字永远横排，绝不允许竖排断字 */
+:global(.nav-link-label) {
+    white-space: nowrap;
+    word-break: keep-all;
+}
+
+/* Paintlab 入口：默认只有文字，悬停时用遮罩在边缘画一圈流光描边 */
+:global(.nav-paintlab) {
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.75rem;
+    padding: 0 20px;
+    border-radius: 12px;
+    text-decoration: none;
+    background: transparent;
+    transition:
+        box-shadow 0.25s ease,
+        transform 0.12s ease;
+}
+
+/* 点按反馈：轻微缩小 + 描边加粗 + 背后浮出半透明流光 */
+:global(.nav-paintlab:active) {
+    transform: scale(0.94);
+    background-image: linear-gradient(
+        110deg,
+        rgba(124, 196, 255, 0.45),
+        rgba(255, 209, 102, 0.38),
+        rgba(255, 122, 198, 0.42),
+        rgba(110, 231, 255, 0.45)
+    );
+    background-size: 220% 100%;
+    animation: paintlab-bg-flow 1.5s linear infinite;
+}
+
+:global(.nav-paintlab:active) .nav-paintlab-border {
+    padding: 4px;
+}
+
+/* 点按时背景那层半透明流光，单向流动 */
+@keyframes paintlab-bg-flow {
+    from {
+        background-position: 0% 50%;
+    }
+    to {
+        background-position: 200% 50%;
+    }
+}
+
+/* 流光描边容器：用 mask 只保留边框区域，内部放一个不停旋转的渐变方块 */
+:global(.nav-paintlab-border) {
+    position: absolute;
+    inset: 0;
+    padding: 2.5px;
+    border-radius: inherit;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.2s ease,
+        padding 0.12s ease;
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    mask-composite: exclude;
+}
+
+:global(.nav-paintlab-border::before) {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 220%;
+    aspect-ratio: 1;
+    background: conic-gradient(
+        #7cc4ff,
+        #ffd166,
+        #ff7ac6,
+        #6ee7ff,
+        #7cc4ff
+    );
+    transform: translate(-50%, -50%) rotate(0deg);
+    animation: paintlab-rotate 3s linear infinite;
+}
+
+:global(.nav-paintlab:hover) .nav-paintlab-border,
+:global(.nav-paintlab:focus-visible) .nav-paintlab-border {
+    opacity: 1;
+}
+
+:global(.nav-paintlab:hover),
+:global(.nav-paintlab:focus-visible) {
+    box-shadow: 0 8px 22px -12px rgba(124, 196, 255, 0.8);
+    outline: none;
+}
+
+/* 旋转 360° 回到原点，天然无缝、可无限循环 */
+@keyframes paintlab-rotate {
+    from {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+:global(.nav-paintlab-inner) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    /* 跟随导航栏文字色：浅色为黑、深色为白；
+       直接写死两套颜色，不走 inherit + transition，避免切换主题时闪一下 */
+    color: #000;
+    transition: none;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+:global(:root.dark .nav-paintlab-inner) {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Paintlab 文字：彩色径向流光。
+   浅色模式用深色调（深蓝/紫/玫红），深色模式用亮色调（金/粉/蓝），
+   保证两种主题下都清晰 */
+:global(.nav-paintlab-inner .nav-link-label) {
+    /* 保留一点白色柔光提升可读性，但强度远低于普通导航文字，避免糊住渐变 */
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.42) !important;
+    background-image: radial-gradient(
+        circle at 50% 50%,
+        #0b1220 0%,
+        #1d4ed8 26%,
+        #9333ea 46%,
+        #db2777 62%,
+        #0b1220 100%
+    );
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: paintlab-text-shine 3s linear infinite;
+}
+
+:global(:root.dark .nav-paintlab-inner .nav-link-label) {
+    background-image: radial-gradient(
+        circle at 50% 50%,
+        #ffffff 0%,
+        #ffd166 26%,
+        #ff7ac6 46%,
+        #7cc4ff 62%,
+        #ffffff 100%
+    );
+}
+
+/* 单向流动：从 0% 走到 200% 后回到起点，色标首尾同色所以接缝不可见 */
+@keyframes paintlab-text-shine {
+    from {
+        background-position: 0% 50%;
+    }
+    to {
+        background-position: 200% 50%;
+    }
+}
+
+@media (max-width: 1180px) {
+    :global(.nav-paintlab) {
+        padding: 0 9px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :global(.nav-paintlab-border::before),
+    :global(.nav-paintlab-inner .nav-link-label) {
+        animation: none;
+    }
+}
+
+/* 窄屏：导航项文字换成图标，避免被挤成竖排 */
+:global(.nav-link-icon) {
+    display: none;
+}
+
+@media (max-width: 1180px) {
+    :global(.nav-link-label) {
+        display: none;
+    }
+    :global(.nav-link-icon) {
+        display: block;
+    }
+    /* 图标模式：收紧点击区域，让 hover 高亮贴合图标本身 */
+    .nav-item-link {
+        height: 2.25rem;
+        padding-left: 0.375rem;
+        padding-right: 0.375rem;
+    }
+}
+
+/* 更窄时标题排成两行（每行两字） */
+@media (max-width: 900px) {
+    :global(.nav-site-title) {
+        width: 2em;
+        white-space: normal;
+        word-break: break-all;
+        line-height: 1.12;
+        font-size: 0.9rem;
+        text-align: center;
+    }
+}
+
 :global(html.background-mode-switching #banner-wrapper),
 :global(html.background-mode-switching #main-grid) {
     transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), height 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;

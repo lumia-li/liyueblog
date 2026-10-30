@@ -82,7 +82,7 @@ function getRedisEnv(): RedisEnv | null {
 function normalizePath(raw: string | null | undefined): string {
 	let path = String(raw || "/");
 	try {
-		path = new URL(path, "https://liyueovo.top").pathname;
+		path = new URL(path, "https://blog.liyueovo.top").pathname;
 	} catch {
 		// 保底：不是合法路径就当成根路径
 		path = "/";
