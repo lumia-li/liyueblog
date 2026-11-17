@@ -58,6 +58,13 @@ export const friendLinkConfig: FriendLinkConfig = {
             url: "https://www.airliny.com/",
             tags: ["技术"],
         },
+        {
+            name: "多多のblog",
+            avatar: "https://duoduo61.de5.net/images/favicon.png",
+            description: "都走吧，没有人属于我",
+            url: "http://duoduo61.de5.net",
+            backlink: "https://duoduo61.de5.net/links/",
+        },
 
     ],
 };

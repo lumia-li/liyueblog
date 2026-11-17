@@ -88,6 +88,8 @@ export type FriendLink = {
 	avatar: string;
 	description: string;
 	url: string;
+	/** 可选：对方的友链页地址，用于双向链接核对 */
+	backlink?: string;
 	/** 可选标签，例如 ["技术", "生活"] */
 	tags?: string[];
 };
