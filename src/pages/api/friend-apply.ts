@@ -1,11 +1,13 @@
 import { createStatusToken } from "@utils/friend-apply-token";
 import {
 	deleteFriendFile,
+	getFriendDataRepo,
 	isFriendDataConfigured,
 	readFriendFile,
 	slugFromUrl,
 	writeFriendFile,
 } from "@utils/friend-data";
+import { notifyFriendApplication } from "@utils/friend-notify";
 import {
 	checkFriendDescription,
 	checkFriendName,
@@ -46,6 +48,9 @@ import { friendLinkConfig } from "../../data/friend-links";
  *   FRIEND_DATA_TOKEN  可选，读写该仓库的 token；不填则用 GITHUB_TOKEN
  *   FRIEND_APPLY_SECRET 查询凭证的签名密钥（见 utils/friend-apply-token.ts）
  *   FRIEND_AUTO_APPROVE 可选，自动审核模式：off / strict / site（默认 off）
+ *   通知（可选，详见 utils/friend-notify.ts）：
+ *     FRIEND_NOTIFY_SMTP_USER / FRIEND_NOTIFY_SMTP_PASS / FRIEND_NOTIFY_EMAIL_TO
+ *     FRIEND_NOTIFY_QMSG_KEY（Qmsg 机器人，可选）
  *
  * 不建数据库：仓库里的 JSON 文件本身就是你的「收件箱」兼友链数据源。
  */
@@ -485,6 +490,25 @@ export const POST: APIRoute = async ({ request }) => {
 		} catch (error) {
 			console.error("[friend-apply] 清理 rejected 记录失败", error);
 		}
+	}
+
+	// 给站长发通知：QQ 邮箱 / Qmsg 机器人，未配置则自动跳过
+	try {
+		await notifyFriendApplication({
+			slug,
+			name: draft.name,
+			url: draft.url,
+			description: draft.description,
+			avatar: avatarValue,
+			backlink: draft.backlink,
+			tags: draft.tags,
+			status: autoApproved ? "approved" : approvedBefore ? "update" : "pending",
+			checks,
+			dataRepo: getFriendDataRepo(),
+			dataPath: `${targetDir}/${slug}.json`,
+		});
+	} catch (error) {
+		console.error("[friend-apply] 发送友链通知失败", error);
 	}
 
 	// 查询凭证：申请人凭它查看自己的申请状态（详见 utils/friend-apply-token.ts）

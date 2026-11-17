@@ -52,6 +52,7 @@
     "katex": "^0.16.27",
     "markdown-it": "^14.1.0",
     "mdast-util-to-string": "^4.0.0",
+    "nodemailer": "^10.6.0",
     "overlayscrollbars": "^2.12.0",
     "pagefind": "^1.4.0",
     "photoswipe": "^5.4.4",
@@ -80,6 +81,7 @@
     "@types/hast": "^3.0.4",
     "@types/markdown-it": "^14.1.2",
     "@types/mdast": "^4.0.4",
+    "@types/nodemailer": "^8.0.2",
     "@types/sanitize-html": "^2.16.0",
     "postcss-import": "^16.1.1",
     "postcss-nesting": "^13.0.2"
