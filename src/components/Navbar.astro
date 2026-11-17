@@ -68,7 +68,7 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
                     </div>
                 </a>;
             })}
-            <a class="nav-paintlab" href={url("/paintlab/")} aria-label="Paintlab" data-tooltip="Paintlab">
+            <a class="nav-paintlab" href={url("/paintlab/")} aria-label="Paintlab" data-tooltip="Paintlab" data-no-swup data-astro-reload>
                 <span class="nav-paintlab-border" aria-hidden="true"></span>
                 <span class="nav-paintlab-inner">
                     <Icon name="fa6-solid:paintbrush" class="nav-link-icon text-[1.15rem] shrink-0" />
@@ -106,6 +106,8 @@ const getNavItemClasses = (targetUrl: string, external = false) => {
                 href={url("/paintlab/")}
                 aria-label="Paintlab"
                 data-tooltip="Paintlab"
+                data-no-swup
+                data-astro-reload
             >
                 <span class="nav-paintlab-border" aria-hidden="true"></span>
                 <span class="nav-paintlab-inner">
