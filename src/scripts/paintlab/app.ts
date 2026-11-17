@@ -43,6 +43,8 @@ interface PaintItem {
 	data: PaintData | null;
 	state: ItemState;
 	card: HTMLElement;
+	/** 缩略图容器，用于按图片真实比例设置高度 */
+	thumbEl: HTMLElement;
 	canvas: HTMLCanvasElement;
 	subEl: HTMLElement;
 	stateEl: HTMLElement;
@@ -119,6 +121,66 @@ export function mountPaintlab(): void {
 	const saveTip = must<HTMLElement>(root, "paintlab-save");
 	const replayAll = must<HTMLButtonElement>(root, "paintlab-replay");
 	const clearAll = must<HTMLButtonElement>(root, "paintlab-clear");
+
+	// ===== 瀑布流布局：卡片按「当前最矮的列」分配，图片高度各自不同 =====
+	let columnEls: HTMLElement[] = [];
+
+	/** 按容器宽度决定列数：手机 1 列、平板 2 列、桌面 3 列 */
+	function desiredColumns(): number {
+		const w = gallery.clientWidth || 900;
+		if (w < 520) return 1;
+		if (w < 840) return 2;
+		return 3;
+	}
+
+	/** 保证列容器数量正确（重建会清空画廊，调用方需重新插入卡片） */
+	function ensureColumns(): void {
+		const need = desiredColumns();
+		if (columnEls.length === need && columnEls.every((c) => c.isConnected)) return;
+		gallery.innerHTML = "";
+		columnEls = [];
+		for (let i = 0; i < need; i += 1) {
+			const col = document.createElement("div");
+			col.className = "paintlab-col";
+			gallery.appendChild(col);
+			columnEls.push(col);
+		}
+	}
+
+	/** 取当前最矮的一列 */
+	function shortestColumn(): HTMLElement {
+		ensureColumns();
+		let best = columnEls[0];
+		let min = Infinity;
+		for (const col of columnEls) {
+			const h = col.getBoundingClientRect().height;
+			if (h < min) {
+				min = h;
+				best = col;
+			}
+		}
+		return best;
+	}
+
+	function appendCard(card: HTMLElement): void {
+		shortestColumn().appendChild(card);
+	}
+
+	/** 清空所有列并重置列引用（下一次 append 会重新建列） */
+	function resetColumns(): void {
+		gallery.innerHTML = "";
+		columnEls = [];
+	}
+
+	/** 列数变化后按原顺序重新分配所有卡片 */
+	function relayoutGallery(): void {
+		const cards = items.map((it) => it.card);
+		ensureColumns();
+		columnEls.forEach((col) => {
+			col.innerHTML = "";
+		});
+		for (const card of cards) appendCard(card);
+	}
 
 	// 主题里有带 transform 的祖先，position:fixed 会相对它定位而不是视口，所以把弹层挪到 body。
 	// swup 命中缓存时 DOM 会被复用，弹层可能已经挂在 body 上，直接复用同一个节点。
@@ -347,7 +409,11 @@ export function mountPaintlab(): void {
 		del.textContent = "×";
 		card.appendChild(del);
 
-		gallery.appendChild(card);
+		// 已知尺寸（刷新恢复）时直接按真实比例占位，避免先闪一下 16:10
+		if (saved?.data?.w && saved?.data?.h) {
+			thumb.style.aspectRatio = `${saved.data.w} / ${saved.data.h}`;
+		}
+		appendCard(card);
 
 		const painter = createPainter({
 			canvas,
@@ -381,6 +447,7 @@ export function mountPaintlab(): void {
 			data: saved?.data ?? null,
 			state: "queued",
 			card,
+			thumbEl: thumb,
 			canvas,
 			subEl,
 			stateEl,
@@ -591,6 +658,10 @@ export function mountPaintlab(): void {
 					});
 					// 原样保留分析结果：不采样、不压时长，保证和原版 paintlab 的笔触密度一致
 					item.data = raw;
+					// 按图片真实宽高比调整缩略图容器，形成高低错落的瀑布流
+					if (item.w && item.h) {
+						item.thumbEl.style.aspectRatio = `${item.w} / ${item.h}`;
+					}
 					item.subEl.textContent = `${item.w}×${item.h} · ${item.data.s.length.toLocaleString("en-US")} 笔 · ${fmtMs(item.data.total)}`;
 					setState(item, "ready");
 					item.hintEl.textContent = "待绘制";
@@ -769,7 +840,7 @@ export function mountPaintlab(): void {
 		});
 		items = [];
 		currentIndex = -1;
-		gallery.innerHTML = "";
+		resetColumns();
 		void clearStored();
 		setSaveState("本地数据已清空", "saved");
 		refreshTotals();
@@ -791,8 +862,12 @@ export function mountPaintlab(): void {
 		// 缺少分析结果的（例如上次没分析完）排队补算，但不自动开始播放
 		if (items.some((it) => !it.data)) void runQueue(false);
 	}
+	let galleryResizeTimer = 0;
 	const onResize = () => {
 		if (lightboxIndex >= 0) fitLightbox();
+		// 宽度变化可能改变列数，重新分配卡片
+		window.clearTimeout(galleryResizeTimer);
+		galleryResizeTimer = window.setTimeout(() => relayoutGallery(), 160);
 	};
 
 	// 缓存 DOM 被复用时要能一次性解绑旧监听，避免重复触发
@@ -824,7 +899,8 @@ export function mountPaintlab(): void {
 	clearAll.addEventListener("click", onClearAll, listen);
 
 	// 命中 swup 缓存时 DOM 是复用的，先把上一次的卡片清干净
-	gallery.innerHTML = "";
+	resetColumns();
+	ensureColumns();
 	lightbox.classList.remove("is-open");
 	lightbox.hidden = true;
 
@@ -847,7 +923,7 @@ export function mountPaintlab(): void {
 		lightbox.classList.remove("is-open");
 		lightbox.hidden = true;
 		lbCtx?.clearRect(0, 0, lbCanvas.width, lbCanvas.height);
-		gallery.innerHTML = "";
+		resetColumns();
 	};
 }
 

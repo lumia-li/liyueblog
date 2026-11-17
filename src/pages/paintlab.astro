@@ -401,10 +401,18 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 		color: #ff8a8a;
 	}
 
+	/* 瀑布流：卡片按最短列分配，每列独立纵向排列，图片保持自身比例 */
 	.paintlab-gallery {
 		margin-top: 16px;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		display: flex;
+		align-items: flex-start;
+		gap: 14px;
+	}
+	.paintlab-col {
+		flex: 1 1 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
 		gap: 14px;
 	}
 
@@ -487,6 +495,7 @@ import MainGridLayout from "../layouts/MainGridLayout.astro";
 		position: relative;
 		display: block;
 		width: 100%;
+		/* 分析完成后由 JS 改成图片真实比例；这里只是未分析前的占位 */
 		aspect-ratio: 16 / 10;
 		background: #fffdf9;
 		border-radius: 10px;
