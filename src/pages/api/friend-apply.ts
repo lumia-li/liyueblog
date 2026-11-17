@@ -6,7 +6,11 @@ import {
 	slugFromUrl,
 	writeFriendFile,
 } from "@utils/friend-data";
-import { checkFriendDescription, checkFriendName } from "@utils/friend-text";
+import {
+	checkFriendDescription,
+	checkFriendName,
+	normalizeFriendTags,
+} from "@utils/friend-text";
 import { collectAvatarCandidates, faviconCandidate, fetchUrl, verifyBacklink } from "@utils/link-check";
 import type { APIRoute } from "astro";
 import { friendLinkConfig } from "../../data/friend-links";
@@ -23,6 +27,14 @@ import { friendLinkConfig } from "../../data/friend-links";
  *      如果该站点**已经通过过**，这次提交只写 applications/（标记 update），
  *      friends/ 里的旧记录保持不动，状态条会显示「信息更新审核中」。
  *
+ * 自动审核（可选，环境变量 FRIEND_AUTO_APPROVE）：
+ *      off    = 默认，全部申请都需要站长手动审核
+ *      strict = 站点可达 + 头像可达（填了头像时）+ 回链验证通过 → 直接写入
+ *               data/friends/ 自动收录（申请人不填友链页则不自动通过）
+ *      site   = 只要站点可达就自动收录（风险更高，慎用）
+ *      自动收录完成后，friends-data 仓库的 notify-deploy 工作流会触发博客重建，
+ *      新友链自动上线；注意"信息更新"同样会按上述规则自动覆盖 friends/ 中的记录。
+ *
  * 提交时会做三项检测：站点可达 / 头像可达 / 对方友链页有没有回链本站。
  *   · 「确定有问题」的（域名解析失败、404、连接被拒、证书异常、内网地址）
  *     → 返回 400 并带上 field，不写任何文件；前端把原因显示在对应输入框下方
@@ -33,6 +45,7 @@ import { friendLinkConfig } from "../../data/friend-links";
  *   FRIEND_DATA_REPO   数据仓库，格式 owner/repo，例如 lumia-li/friends-data
  *   FRIEND_DATA_TOKEN  可选，读写该仓库的 token；不填则用 GITHUB_TOKEN
  *   FRIEND_APPLY_SECRET 查询凭证的签名密钥（见 utils/friend-apply-token.ts）
+ *   FRIEND_AUTO_APPROVE 可选，自动审核模式：off / strict / site（默认 off）
  *
  * 不建数据库：仓库里的 JSON 文件本身就是你的「收件箱」兼友链数据源。
  */
@@ -57,6 +70,20 @@ const TIMEOUT = {
 	backlink: 6000,
 } as const;
 
+type AutoApproveMode = "off" | "strict" | "site";
+
+/** 自动审核模式：默认 off；strict = 站点+头像+回链都通过；site = 仅站点可达 */
+function getAutoApproveMode(): AutoApproveMode {
+	const value = String(import.meta.env.FRIEND_AUTO_APPROVE || "")
+		.trim()
+		.toLowerCase();
+	if (value === "strict" || value === "true" || value === "1" || value === "yes") {
+		return "strict";
+	}
+	if (value === "site") return "site";
+	return "off";
+}
+
 /** 本站地址：拿 friend-links 里对外公布的那份，保证和别人加友链时填的一致 */
 function getSiteUrl(): string {
 	return String(friendLinkConfig.self.url || import.meta.env.SITE || "").trim();
@@ -68,6 +95,7 @@ type ApplicationDraft = {
 	avatar: string;
 	backlink: string;
 	description: string;
+	tags: string[];
 };
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -159,6 +187,7 @@ function parseApplication(raw: unknown): ParseResult {
 		avatar: "",
 		backlink: "",
 		description: "",
+		tags: [],
 	};
 
 	// 蜜罐字段：正常访客看不到、不会填；填了就当机器人静默丢弃
@@ -172,6 +201,8 @@ function parseApplication(raw: unknown): ParseResult {
 		avatar: readText(body.avatar, LIMITS.avatar),
 		backlink: readText(body.backlink, LIMITS.backlink),
 		description: readText(body.description, LIMITS.description),
+		// 分类最多 3 个、每个最多 5 个字（详见 utils/friend-text.ts）
+		tags: normalizeFriendTags(body.tags),
 	};
 
 	// 名称 / 简介的文本检测：和前端共用 utils/friend-text.ts，规则完全一致
@@ -385,28 +416,43 @@ export const POST: APIRoute = async ({ request }) => {
 		...(backlinkResult ? { backlinkVerified: backlinkResult.verified } : {}),
 	};
 
+	// 自动审核：只有本次提交的实时检测结果全部达标才直接收录，
+	// 避免把 403/超时/未填回链这类"说不准"的申请自动放行。
+	const autoApproveMode = getAutoApproveMode();
+	const autoApproved =
+		autoApproveMode !== "off" &&
+		siteCheck.ok &&
+		(avatarCheck ? avatarCheck.ok : true) &&
+		(autoApproveMode === "site" || Boolean(backlinkResult?.verified));
+
+	const entry = {
+		name: draft.name,
+		description: draft.description,
+		avatar: avatarValue,
+		...(avatarAuto ? { avatarAuto: true } : {}),
+		url: draft.url,
+		...(draft.backlink ? { backlink: draft.backlink } : {}),
+		...(draft.tags.length ? { tags: draft.tags } : {}),
+		// 没填友链页时也要留个明确标记：审核时一眼看出这条得手动核对回链
+		backlinkProvided: Boolean(draft.backlink),
+		...(approvedBefore ? { update: true } : {}),
+		status: autoApproved ? "approved" : approvedBefore ? "update" : "pending",
+		submittedAt: new Date().toISOString(),
+		...(autoApproved
+			? { autoApproved: true, approvedAt: new Date().toISOString() }
+			: {}),
+		checks,
+	};
+
+	const targetDir = autoApproved ? "friends" : "applications";
+	const commitMessage = autoApproved
+		? `${approvedBefore ? "chore(friends): 自动更新" : "chore(friends): 自动收录"} ${draft.name} (${slug})`
+		: approvedBefore
+			? `chore(friends): 更新 ${draft.name} (${slug})`
+			: `chore(friends): 申请 ${draft.name} (${slug})`;
+
 	try {
-		const result = await writeFriendFile(
-			"applications",
-			slug,
-			{
-				name: draft.name,
-				description: draft.description,
-				avatar: avatarValue,
-				...(avatarAuto ? { avatarAuto: true } : {}),
-				url: draft.url,
-				...(draft.backlink ? { backlink: draft.backlink } : {}),
-				// 没填友链页时也要留个明确标记：审核时一眼看出这条得手动核对回链
-				backlinkProvided: Boolean(draft.backlink),
-				...(approvedBefore ? { update: true } : {}),
-				status: approvedBefore ? "update" : "pending",
-				submittedAt: new Date().toISOString(),
-				checks,
-			},
-			approvedBefore
-				? `chore(friends): 更新 ${draft.name} (${slug})`
-				: `chore(friends): 申请 ${draft.name} (${slug})`,
-		);
+		const result = await writeFriendFile(targetDir, slug, entry, commitMessage);
 
 		if (!result.ok) {
 			console.error("[friend-apply] 写入数据仓库失败", result.error);
@@ -418,6 +464,18 @@ export const POST: APIRoute = async ({ request }) => {
 			ok: false,
 			message: "提交失败，请稍后再试，或者直接通过页面上的联系方式找我",
 		});
+	}
+
+	// 自动收录后清掉旧的 applications 记录，避免状态查询一直显示「审核中」
+	if (autoApproved) {
+		try {
+			const staleApplication = await readFriendFile("applications", slug);
+			if (staleApplication.exists) {
+				await deleteFriendFile("applications", slug);
+			}
+		} catch (error) {
+			console.error("[friend-apply] 清理旧申请记录失败", error);
+		}
 	}
 
 	// 之前被拒过的站重新申请：清掉旧的 rejected 记录，状态回到「审核中」
@@ -433,7 +491,8 @@ export const POST: APIRoute = async ({ request }) => {
 	return json(200, {
 		ok: true,
 		statusToken: createStatusToken(slug),
-		state: approvedBefore ? "update" : "pending",
+		state: autoApproved ? "approved" : approvedBefore ? "update" : "pending",
+		autoApproved,
 		warnings,
 		checks,
 	});

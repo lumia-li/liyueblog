@@ -16,7 +16,13 @@ const showApply = Boolean(apply?.enable);
 //   1) 申请文件里的 status 改成 "approved"（最省事：改一个词就行）
 //   2) 把文件从 data/applications/ 移到 data/friends/（老办法，依然兼容）
 // 拉取失败时静默退回本地列表，绝不影响构建
-let remoteFriends: { name: string; avatar: string; description: string; url: string }[] = [];
+let remoteFriends: {
+	name: string;
+	avatar: string;
+	description: string;
+	url: string;
+	tags?: string[];
+}[] = [];
 try {
 	const [movedToFriends, applications] = await Promise.all([
 		listFriendDir("friends"),
@@ -31,6 +37,7 @@ try {
 		avatar: entry.avatar || "",
 		description: entry.description || "",
 		url: entry.url,
+		tags: Array.isArray(entry.tags) ? entry.tags : [],
 	}));
 } catch (error) {
 	console.error("[friends] 读取数据仓库失败，仅使用本地友链列表", error);

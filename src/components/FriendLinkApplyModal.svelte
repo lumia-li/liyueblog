@@ -1,7 +1,13 @@
 <script lang="ts">
 	import Icon from "@iconify/svelte";
 	import { onMount } from "svelte";
-	import { checkFriendDescription, checkFriendName } from "../utils/friend-text";
+	import {
+	FRIEND_TAGS_MAX,
+	FRIEND_TAG_MAX,
+	checkFriendDescription,
+	checkFriendName,
+	checkFriendTag,
+} from "../utils/friend-text";
 
 	export let buttonLabel = "填写申请表单";
 	export let title = "申请友链";
@@ -18,6 +24,9 @@
 	let intro = "";
 	let avatar = "";
 	let backlink = "";
+	let siteTags: string[] = [];
+	let tagInput = "";
+	let tagError = "";
 	let website = ""; // 蜜罐字段：正常访客看不见，机器人会填
 	/** 本次提交有没有填「友链页」（提交时先记下来，因为成功后输入框会被清空） */
 	let submittedWithoutBacklink = false;
@@ -143,6 +152,43 @@
 		textChecks = next;
 	}
 
+	// ── 网站分类：回车生成小标签，点 × 删除，最多 3 个、每个最多 5 个字 ──
+	$: tagsFull = siteTags.length >= FRIEND_TAGS_MAX;
+
+	function addTag() {
+		tagError = "";
+		const value = tagInput.trim().replace(/\s+/g, " ");
+		if (!value) return;
+		if (tagsFull) {
+			tagError = `最多添加 ${FRIEND_TAGS_MAX} 个分类`;
+			return;
+		}
+		if (siteTags.some((tag) => tag.toLowerCase() === value.toLowerCase())) {
+			tagError = "这个分类已经添加过了";
+			return;
+		}
+		const result = checkFriendTag(value);
+		if (!result.ok) {
+			tagError = result.message;
+			return;
+		}
+		siteTags = [...siteTags, value];
+		tagInput = "";
+	}
+
+	function removeTag(value: string) {
+		siteTags = siteTags.filter((tag) => tag !== value);
+		tagError = "";
+	}
+
+	function onTagKeydown(event: KeyboardEvent) {
+		if (event.key !== "Enter") return;
+		// 阻止回车直接提交整个表单；输入法选词时的回车也不处理
+		event.preventDefault();
+		if (event.isComposing) return;
+		addTag();
+	}
+
 	/** 有「确定有问题」的字段时不许提交（note 只是提示，不拦） */
 	const hasBlockingError = (checks: Partial<Record<CheckField, FieldCheck>> = fieldChecks) =>
 		Object.values(checks).some((check) => check?.level === "error");
@@ -170,6 +216,9 @@
 		submittedState = "";
 		fieldChecks = {};
 		textChecks = {};
+		siteTags = [];
+		tagInput = "";
+		tagError = "";
 		submittedWithoutBacklink = false;
 		// 用原生 <dialog>.showModal()：渲染在 top layer，
 		// 不受页面里 will-change: transform 容器的影响
@@ -184,6 +233,13 @@
 
 	async function submit() {
 		if (submitting) return;
+		// 输入框里还有没按回车的分类，提交时自动收进去
+		if (tagInput.trim()) {
+			addTag();
+			if (tagError) return;
+		} else {
+			tagError = "";
+		}
 		submitting = true;
 		errorMessage = "";
 		try {
@@ -204,14 +260,15 @@
 					avatar,
 					backlink,
 					description: intro,
+					tags: siteTags,
 					website,
 				}),
 			});
 			const data = (await response.json().catch(() => null)) as {
 				ok?: boolean;
 				message?: string;
-				/** 服务端把不合格的字段挂在这里：链接类是 url/avatar/backlink，文本类是 name/description */
-				field?: CheckField | TextField;
+				/** 服务端把不合格的字段挂在这里：链接类是 url/avatar/backlink，文本类是 name/description，分类是 tags */
+				field?: CheckField | TextField | "tags";
 				statusToken?: string;
 				state?: string;
 				warnings?: string[];
@@ -224,6 +281,10 @@
 						...textChecks,
 						[data.field]: data.message || "内容没检测通过",
 					};
+					return;
+				}
+				if (data?.field === "tags") {
+					tagError = data.message || "分类信息没检测通过";
 					return;
 				}
 				// 链接类的问题同样挂回对应输入框
@@ -240,7 +301,12 @@
 			}
 
 			success = true;
-			submittedState = data.state === "update" ? "update" : "pending";
+			submittedState =
+				data.state === "approved"
+					? "approved"
+					: data.state === "update"
+						? "update"
+						: "pending";
 			warnings = Array.isArray(data.warnings) ? data.warnings : [];
 
 			// 存下查询凭证，友链页顶部的状态条靠它显示「审核中 / 已通过 / 未通过」
@@ -268,6 +334,9 @@
 			avatar = "";
 			backlink = "";
 			intro = "";
+			siteTags = [];
+			tagInput = "";
+			tagError = "";
 		} catch {
 			errorMessage = "网络异常，提交失败，请稍后再试";
 		} finally {
@@ -314,12 +383,18 @@
 			<div class="flex flex-col items-center gap-3 py-6 text-center">
 				<Icon icon="fa6-solid:circle-check" class="text-[2.5rem] text-[var(--primary)]"></Icon>
 				<div class="text-90 font-bold">
-					{submittedState === "update" ? "信息更新已提交！" : "申请已提交！"}
+					{submittedState === "approved"
+						? "已通过检测，自动收录！"
+						: submittedState === "update"
+							? "信息更新已提交！"
+							: "申请已提交！"}
 				</div>
 				<p class="text-75 text-sm">
-					{submittedState === "update"
-						? "你的站点已经在友链列表里了，这次是信息更新：审核通过后列表会自动换成新信息。"
-						: "会尽快审核，通过后你的站点就会出现在友链列表里~"}
+					{submittedState === "approved"
+						? "你的站点已通过自动检测并加入友链，刷新页面就能看到。"
+						: submittedState === "update"
+							? "你的站点已经在友链列表里了，这次是信息更新：审核通过后列表会自动换成新信息。"
+							: "会尽快审核，通过后你的站点就会出现在友链列表里~"}
 				</p>
 
 				<!-- 服务端自动检测的结果：只提示，不影响提交 -->
@@ -421,6 +496,56 @@
 						</p>
 					{/if}
 				</label>
+
+				<div class="flex flex-col gap-1.5">
+					<span class="text-75 text-xs font-medium">
+						网站分类
+						<span class="text-30">
+							（可选，最多 {FRIEND_TAGS_MAX} 个，每个最多 {FRIEND_TAG_MAX} 个字）
+						</span>
+					</span>
+					<div
+						class="flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-lg border border-transparent bg-[var(--btn-regular-bg)] px-2 py-1.5 text-90 transition focus-within:border-[var(--primary)]"
+					>
+						{#each siteTags as tag (tag)}
+							<span
+								class="inline-flex items-center gap-1 rounded-full bg-[var(--btn-regular-bg-hover)] px-2 py-0.5 text-xs text-[var(--btn-content)]"
+							>
+								{tag}
+								<button
+									type="button"
+									aria-label={`删除分类 ${tag}`}
+									class="inline-flex h-3 w-3 shrink-0 items-center justify-center border-0 bg-transparent p-0 leading-none opacity-60 transition hover:text-red-400 hover:opacity-100"
+									onclick={(event) => {
+										event.preventDefault();
+										event.stopPropagation();
+										removeTag(tag);
+									}}
+								>
+									<Icon icon="fa6-solid:xmark" class="text-[0.55rem]"></Icon>
+								</button>
+							</span>
+						{/each}
+						<input
+							bind:value={tagInput}
+							type="text"
+							aria-label="网站分类"
+							maxlength={FRIEND_TAG_MAX}
+							placeholder={tagsFull
+								? "已达上限"
+								: siteTags.length > 0
+									? "继续添加…"
+									: "输入分类后按回车"}
+							class="min-w-[6rem] flex-1 bg-transparent text-sm text-90 outline-none placeholder:text-black/25 dark:placeholder:text-white/25 disabled:cursor-not-allowed"
+							disabled={tagsFull}
+							oninput={() => (tagError = "")}
+							onkeydown={onTagKeydown}
+						/>
+					</div>
+					{#if tagError}
+						<p class="text-xs leading-5 text-red-500 dark:text-red-400">{tagError}</p>
+					{/if}
+				</div>
 
 				<label class="flex flex-col gap-1.5">
 					<span class="text-75 text-xs font-medium">

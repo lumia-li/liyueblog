@@ -13,6 +13,10 @@ export const FRIEND_NAME_MIN = 2;
 export const FRIEND_NAME_MAX = 40;
 export const FRIEND_DESCRIPTION_MIN = 4;
 export const FRIEND_DESCRIPTION_MAX = 80;
+/** 单个网站分类最多几个字 */
+export const FRIEND_TAG_MAX = 5;
+/** 最多可以添加几个分类 */
+export const FRIEND_TAGS_MAX = 3;
 
 export type TextCheck = { ok: true } | { ok: false; message: string };
 
@@ -84,4 +88,38 @@ export function checkFriendDescription(value: string): TextCheck {
 		return { ok: false, message: "简介不能只有符号" };
 	}
 	return { ok: true };
+}
+
+/** 单个网站分类的校验：1~5 个字，不能含 < > 等 */
+export function checkFriendTag(value: string): TextCheck {
+	const text = value.trim();
+	if (!text) return { ok: false, message: "分类不能为空" };
+	if (lengthOf(text) > FRIEND_TAG_MAX) {
+		return { ok: false, message: `每个分类最多 ${FRIEND_TAG_MAX} 个字` };
+	}
+	if (TAG_PATTERN.test(text)) {
+		return { ok: false, message: "分类里不能包含 < > 符号" };
+	}
+	if (!hasMeaningfulChar(text)) {
+		return { ok: false, message: "分类不能只有符号" };
+	}
+	return { ok: true };
+}
+
+/**
+ * 后端兜底：清洗前端传来的分类数组。
+ * 只保留合格、去重后的分类，最多 FRIEND_TAGS_MAX 个；绕过前端直接提交也不会超限。
+ */
+export function normalizeFriendTags(input: unknown): string[] {
+	if (!Array.isArray(input)) return [];
+	const tags: string[] = [];
+	for (const raw of input) {
+		if (typeof raw !== "string") continue;
+		const text = raw.trim().replace(/\s+/g, " ");
+		if (!checkFriendTag(text).ok) continue;
+		if (tags.some((tag) => tag.toLowerCase() === text.toLowerCase())) continue;
+		tags.push(text);
+		if (tags.length >= FRIEND_TAGS_MAX) break;
+	}
+	return tags;
 }

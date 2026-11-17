@@ -28,6 +28,8 @@ export type FriendDataEntry = {
 	url: string;
 	/** 申请人自己的友链页地址，用来校验双向链接 */
 	backlink?: string;
+	/** 网站分类（最多 3 个，每个最多 5 个字） */
+	tags?: string[];
 	/**
 	 * 申请人有没有填「友链页」。
 	 * false = 没填，双向链接没法自动确认，**需要站长手动去他站上核对**。
@@ -37,6 +39,10 @@ export type FriendDataEntry = {
 	update?: boolean;
 	/** true = 头像不是申请人填的，而是从他站点首页自动抓的（供站长核对） */
 	avatarAuto?: boolean;
+	/** true = 该友链由自动检测通过后直接收录（FRIEND_AUTO_APPROVE） */
+	autoApproved?: boolean;
+	/** 自动通过的时间 */
+	approvedAt?: string;
 	/** 提交时的自动检测结果，供站长审核参考（不作为通过/拒绝依据） */
 	checks?: {
 		siteReachable?: boolean;
